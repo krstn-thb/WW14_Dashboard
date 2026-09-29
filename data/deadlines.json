@@ -1,0 +1,17 @@
+{
+  "items": [
+    {
+      "title": "Beispiel: Abstract einreichen",
+      "due": "2026-11-15T23:59:00+01:00",
+      "kind": "Konferenz",
+      "url": ""
+    },
+    {
+      "title": "Beispiel: Journal Revision",
+      "due": "2026-12-12T18:00:00+01:00",
+      "kind": "Journal",
+      "url": ""
+    }
+  ]
+}
+

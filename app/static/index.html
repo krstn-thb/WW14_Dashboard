@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#071311" />
+    <title>WW14 Dashboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-one" aria-hidden="true"></div>
+    <div class="ambient ambient-two" aria-hidden="true"></div>
+
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">W</div>
+          <div>
+            <h1 id="dashboard-title">WW14 Dashboard</h1>
+            <p id="dashboard-subtitle">Lehre · Forschung · Raumklima</p>
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <div id="connection" class="connection" role="status">
+            <span class="connection-dot"></span>
+            <span>Verbinde …</span>
+          </div>
+          <button id="fullscreen-button" class="icon-button" type="button" title="Vollbild umschalten" aria-label="Vollbild umschalten">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" /></svg>
+          </button>
+          <div class="clock" aria-label="Aktuelle Uhrzeit">
+            <strong id="clock-time">--:--</strong>
+            <span id="clock-date">Lädt …</span>
+          </div>
+        </div>
+      </header>
+
+      <section class="dashboard-grid" aria-label="Dashboard-Inhalte">
+        <article class="panel climate-panel">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">Loxone · InfluxDB</span>
+              <h2>Raumklima</h2>
+            </div>
+            <span id="climate-state" class="source-state">Lädt …</span>
+          </div>
+          <div id="climate-content" class="metric-grid loading-block"></div>
+          <div class="panel-footer">
+            <span id="climate-message">Messwerte werden geladen</span>
+            <span id="climate-updated"></span>
+          </div>
+        </article>
+
+        <article class="panel deadlines-panel">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">Publikationen</span>
+              <h2>Deadlines</h2>
+            </div>
+            <span class="panel-count" id="deadline-count">0</span>
+          </div>
+          <div id="deadline-content" class="list loading-block"></div>
+        </article>
+
+        <article class="panel stocks-panel">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">Märkte</span>
+              <h2>Aktien</h2>
+            </div>
+            <span id="stock-state" class="source-state">Lädt …</span>
+          </div>
+          <div id="stock-content" class="stock-list loading-block"></div>
+          <div class="panel-footer"><span id="stock-message"></span></div>
+        </article>
+
+        <article class="panel events-panel">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">Kalender</span>
+              <h2>Wichtige Termine</h2>
+            </div>
+            <span class="panel-count" id="event-count">0</span>
+          </div>
+          <div id="event-content" class="event-list loading-block"></div>
+        </article>
+
+        <article class="panel todos-panel">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">Heute im Blick</span>
+              <h2>To-do</h2>
+            </div>
+            <span class="panel-count" id="todo-count">0</span>
+          </div>
+          <form id="todo-form" class="todo-form">
+            <label class="sr-only" for="todo-input">Neue Aufgabe</label>
+            <input id="todo-input" maxlength="240" autocomplete="off" placeholder="Neue Aufgabe …" />
+            <button type="submit" aria-label="Aufgabe hinzufügen">+</button>
+          </form>
+          <div id="todo-content" class="todo-list loading-block"></div>
+        </article>
+      </section>
+
+      <footer class="page-footer">
+        <span id="last-refresh">Noch nicht aktualisiert</span>
+        <span>Automatische Aktualisierung <b id="refresh-interval">–</b></span>
+      </footer>
+    </main>
+
+    <div id="toast" class="toast" role="alert" aria-live="assertive"></div>
+    <script src="/app.js" defer></script>
+  </body>
+</html>
+

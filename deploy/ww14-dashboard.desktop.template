@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=WW14 Dashboard Kiosk
+Comment=Startet das WW14 Dashboard im Vollbild
+Exec=@@PROJECT_DIR@@/scripts/start-kiosk.sh
+Terminal=false
+X-GNOME-Autostart-enabled=true
+

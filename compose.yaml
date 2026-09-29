@@ -1,0 +1,13 @@
+services:
+  dashboard:
+    build: .
+    container_name: ww14-dashboard
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    volumes:
+      - ./config:/app/config:ro
+      - ./data:/app/data
+

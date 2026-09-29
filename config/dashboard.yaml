@@ -1,0 +1,76 @@
+dashboard:
+  title: "WW14 Dashboard"
+  subtitle: "Lehre · Forschung · Raumklima"
+  timezone: "Europe/Berlin"
+  locale: "de-DE"
+  refresh_seconds: 60
+
+storage:
+  database: "data/dashboard.db"
+
+influxdb:
+  enabled: false
+  url: "${INFLUXDB_URL:-http://127.0.0.1:8086}"
+  org: "${INFLUXDB_ORG:-ww14}"
+  bucket: "${INFLUXDB_BUCKET:-loxone}"
+  token: "${INFLUXDB_TOKEN:-}"
+
+climate:
+  range: "-24h"
+  window: "15m"
+  cache_seconds: 60
+  metrics:
+    - id: temperature
+      label: Temperatur
+      measurement: climate
+      field: temperature
+      tags:
+        room: WW14
+      unit: "°C"
+      decimals: 1
+    - id: humidity
+      label: Luftfeuchte
+      measurement: climate
+      field: humidity
+      tags:
+        room: WW14
+      unit: "%"
+      decimals: 0
+    - id: co2
+      label: CO₂
+      measurement: climate
+      field: co2
+      tags:
+        room: WW14
+      unit: ppm
+      decimals: 0
+  demo_metrics:
+    - { id: temperature, label: Temperatur, value: 21.6, unit: "°C", decimals: 1 }
+    - { id: humidity, label: Luftfeuchte, value: 48, unit: "%", decimals: 0 }
+    - { id: co2, label: CO₂, value: 620, unit: ppm, decimals: 0 }
+    - { id: pressure, label: Luftdruck, value: 1017, unit: hPa, decimals: 0 }
+
+deadlines:
+  file: "data/deadlines.json"
+  json_feeds: []
+  horizon_days: 365
+  cache_seconds: 900
+
+events:
+  file: "data/events.json"
+  horizon_days: 90
+  cache_seconds: 300
+  ical: []
+  # Beispiel für einen eingebundenen Kalender:
+  #  - name: Hochschulkalender
+  #    url: "https://example.org/calendar.ics"
+
+stocks:
+  enabled: false
+  provider: demo
+  cache_seconds: 300
+  symbols:
+    - { symbol: "SAP.DE", label: SAP, currency: EUR, price: 232.4 }
+    - { symbol: "SIE.DE", label: Siemens, currency: EUR, price: 226.1 }
+    - { symbol: "AAPL", label: Apple, currency: USD, price: 246.5 }
+
