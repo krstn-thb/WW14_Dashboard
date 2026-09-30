@@ -23,6 +23,18 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function sortedTagEntries(tags = {}) {
+  return Object.entries(tags).sort(([left], [right]) => left.localeCompare(right));
+}
+
+function climateMetricKey(item) {
+  return JSON.stringify([item.measurement, item.field, sortedTagEntries(item.tags)]);
+}
+
+function formatInfluxTags(tags = {}) {
+  return sortedTagEntries(tags).map(([key, value]) => `${key}=${value}`).join(" · ");
+}
+
 function showToast(message) {
   const toast = $("#toast");
   toast.textContent = message;
@@ -389,7 +401,7 @@ function renderClimateSelections(items) {
   const target = $("#climate-selected");
   target.innerHTML = items.length
     ? items.map((item) => `<div class="manage-selection">
-      <div class="manage-copy"><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.measurement)} · ${escapeHtml(item.field)}${item.unit ? ` · ${escapeHtml(item.unit)}` : ""}</span></div>
+      <div class="manage-copy"><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.measurement)} · ${escapeHtml(item.field)}${formatInfluxTags(item.tags) ? ` · ${escapeHtml(formatInfluxTags(item.tags))}` : ""}${item.unit ? ` · ${escapeHtml(item.unit)}` : ""}</span></div>
       <button class="remove-selection" type="button" data-remove-climate="${Number(item.id)}" aria-label="${escapeHtml(item.label)} entfernen">×</button>
     </div>`).join("")
     : '<div class="manage-message">Noch kein InfluxDB-Messwert ausgewählt.</div>';
@@ -523,11 +535,11 @@ $("#influx-discover-button").addEventListener("click", async (event) => {
   target.innerHTML = '<div class="manage-message">InfluxDB wird durchsucht …</div>';
   try {
     const data = await request("/api/influx/fields");
-    const selected = new Set(state.selectedClimateMetrics.map((item) => `${item.measurement}\u0000${item.field}`));
-    const items = (data.items || []).filter((item) => !selected.has(`${item.measurement}\u0000${item.field}`));
+    const selected = new Set(state.selectedClimateMetrics.map(climateMetricKey));
+    const items = (data.items || []).filter((item) => !selected.has(climateMetricKey(item)));
     target.innerHTML = items.length
-      ? items.map((item) => `<button class="manage-result" type="button" data-add-measurement="${escapeHtml(item.measurement)}" data-add-field="${escapeHtml(item.field)}">
-        <span class="manage-copy"><strong>${escapeHtml(item.field)}</strong><span>${escapeHtml(item.measurement)} · ${escapeHtml(data.bucket)}</span></span>
+      ? items.map((item) => `<button class="manage-result" type="button" data-add-measurement="${escapeHtml(item.measurement)}" data-add-field="${escapeHtml(item.field)}" data-add-tags="${escapeHtml(JSON.stringify(item.tags || {}))}">
+        <span class="manage-copy"><strong>${escapeHtml(item.field)}</strong><span>${escapeHtml(item.measurement)}${formatInfluxTags(item.tags) ? ` · ${escapeHtml(formatInfluxTags(item.tags))}` : ""} · ${escapeHtml(data.bucket)}</span></span>
         <span>Hinzufügen</span>
       </button>`).join("")
       : '<div class="manage-message">Keine weiteren Messfelder mit aktuellen Daten gefunden.</div>';
@@ -545,7 +557,11 @@ $("#influx-discovery-results").addEventListener("click", async (event) => {
   try {
     await request("/api/climate/metrics", {
       method: "POST",
-      body: JSON.stringify({ measurement: button.dataset.addMeasurement, field: button.dataset.addField }),
+      body: JSON.stringify({
+        measurement: button.dataset.addMeasurement,
+        field: button.dataset.addField,
+        tags: JSON.parse(button.dataset.addTags || "{}"),
+      }),
     });
     button.remove();
     await refreshClimateSelections();

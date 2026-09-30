@@ -81,6 +81,18 @@ def _metric_defaults(field: str) -> tuple[str, str, int]:
     return label or field, "", 1
 
 
+def _metric_sensor_label(tags: dict[str, str]) -> str:
+    if not tags:
+        return ""
+    preferred_keys = ("room", "raum", "name", "sensor", "device", "location", "ort")
+    lowered = {key.lower(): value for key, value in tags.items()}
+    for key in preferred_keys:
+        value = lowered.get(key, "").strip()
+        if value:
+            return value
+    return next((value.strip() for value in tags.values() if value.strip()), "")
+
+
 def _timezone(config: dict[str, Any]) -> ZoneInfo:
     try:
         return ZoneInfo(config.get("dashboard", {}).get("timezone", "Europe/Berlin"))
@@ -245,6 +257,9 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
                 status_code=422, detail="Measurement und Field werden benötigt"
             )
         default_label, default_unit, default_decimals = _metric_defaults(field)
+        sensor_label = _metric_sensor_label(payload.tags)
+        if sensor_label:
+            default_label = f"{default_label} · {sensor_label}"
         return await asyncio.to_thread(
             store.add_climate_metric,
             measurement,

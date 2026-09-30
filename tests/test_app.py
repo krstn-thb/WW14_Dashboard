@@ -116,13 +116,19 @@ def test_climate_metric_selection_lifecycle(tmp_path: Path) -> None:
         current = client.get("/api/climate/metrics")
         created = client.post(
             "/api/climate/metrics",
-            json={"measurement": "loxone", "field": "temperature"},
+            json={
+                "measurement": "loxone",
+                "field": "temperature",
+                "tags": {"room": "Büro"},
+            },
         )
         deleted = client.delete(f'/api/climate/metrics/{created.json()["id"]}')
 
     assert current.json() == []
     assert created.status_code == 201
     assert created.json()["unit"] == "°C"
+    assert created.json()["label"] == "Temperatur · Büro"
+    assert created.json()["tags"] == {"room": "Büro"}
     assert deleted.status_code == 204
 
 

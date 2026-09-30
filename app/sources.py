@@ -176,8 +176,8 @@ def _query_influx_sync(config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def discover_influx_fields(config: dict[str, Any]) -> list[dict[str, str]]:
-    """Return measurement/field pairs that currently contain data."""
+def discover_influx_fields(config: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return the numeric Influx series that currently contain data."""
     from influxdb_client import InfluxDBClient
 
     influx = config.get("influxdb", {})
@@ -192,27 +192,42 @@ def discover_influx_fields(config: dict[str, Any]) -> list[dict[str, str]]:
     query = (
         f'from(bucket: "{_flux_escape(bucket)}")\n'
         f"  |> range(start: {lookback})\n"
-        '  |> group(columns: ["_measurement", "_field"])\n'
-        "  |> last()\n"
-        '  |> keep(columns: ["_measurement", "_field", "_value"])'
+        "  |> last()"
     )
-    found: set[tuple[str, str]] = set()
+    found: set[tuple[str, str, tuple[tuple[str, str], ...]]] = set()
     with InfluxDBClient(url=url, token=token, org=org, timeout=15_000) as client:
         for table in client.query_api().query(query=query, org=org):
             for record in table.records:
                 measurement = str(record.values.get("_measurement", "")).strip()
                 field = str(record.values.get("_field", "")).strip()
                 value = record.get_value()
+                tags = tuple(
+                    sorted(
+                        (str(key), str(tag_value))
+                        for key, tag_value in record.values.items()
+                        if key not in {"result", "table"}
+                        and not str(key).startswith("_")
+                        and tag_value is not None
+                        and str(tag_value).strip()
+                    )
+                )
                 if (
                     measurement
                     and field
                     and isinstance(value, (int, float))
                     and not isinstance(value, bool)
                 ):
-                    found.add((measurement, field))
+                    found.add((measurement, field, tags))
     return [
-        {"measurement": measurement, "field": field}
-        for measurement, field in sorted(found, key=lambda item: (item[0].lower(), item[1].lower()))
+        {"measurement": measurement, "field": field, "tags": dict(tags)}
+        for measurement, field, tags in sorted(
+            found,
+            key=lambda item: (
+                item[0].lower(),
+                item[1].lower(),
+                tuple((key.lower(), value.lower()) for key, value in item[2]),
+            ),
+        )
     ]
 
 
