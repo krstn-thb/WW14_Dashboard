@@ -216,8 +216,8 @@ function radarMap(radar) {
       layers: layer,
       styles: "",
       bbox,
-      width: "768",
-      height: "768",
+      width: "512",
+      height: "512",
       srs: "EPSG:3857",
       format: "image/png",
       transparent: "true",
@@ -227,7 +227,7 @@ function radarMap(radar) {
   });
   const first = state.radarFrames[0];
   return `<div class="radar-map" title="DWD-Niederschlagsradar mit Vorhersage für die nächsten zwei Stunden">
-    <div class="radar-tile-grid" style="left:calc(50% - ${markerX.toFixed(1)}px);top:calc(50% - ${markerY.toFixed(1)}px)">${tiles.join("")}<img id="radar-frame" class="radar-frame" src="${escapeHtml(first.url)}" alt="Animierte Niederschlagsvorhersage" /></div>
+    <div class="radar-tile-grid" style="left:calc(50% - ${markerX.toFixed(1)}px);top:calc(50% - ${markerY.toFixed(1)}px)">${tiles.join("")}<img id="radar-frame" class="radar-frame" src="${escapeHtml(first.url)}" decoding="async" alt="Animierte Niederschlagsvorhersage" /></div>
     <span class="radar-marker" aria-label="Brandenburg an der Havel"></span>
     <span id="radar-time" class="radar-time">Radar jetzt · ${formatDate(first.time, { hour: "2-digit", minute: "2-digit" })}</span>
     <span class="radar-live"><i></i> 2 h Vorschau</span>
@@ -244,6 +244,7 @@ function startRadarAnimation() {
 
   state.radarFrames.slice(1).forEach((frame) => {
     const preload = new Image();
+    preload.decoding = "async";
     preload.src = frame.url;
   });
   if (state.radarFrames.length === 1) return;
@@ -255,7 +256,7 @@ function startRadarAnimation() {
     image.src = frame.url;
     const offset = Number(frame.minutes_ahead) > 0 ? `+${frame.minutes_ahead} min` : "jetzt";
     label.textContent = `Radar ${offset} · ${formatDate(frame.time, { hour: "2-digit", minute: "2-digit" })}`;
-  }, 950);
+  }, 1400);
 }
 
 function renderWeather(weather) {

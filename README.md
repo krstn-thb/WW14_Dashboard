@@ -79,7 +79,17 @@ Die sichtbaren Inhalte stehen in `config/dashboard.yaml`. Zugangsdaten gehören 
 
 Die Auswahl wird lokal in `data/dashboard.db` gespeichert und verursacht deshalb keine Konflikte bei `git pull`. Beim ersten Start sind die Definitionen aus `config/dashboard.yaml` vorausgewählt und können im Auswahlfenster entfernt werden.
 
-Beispiel:
+Für InfluxDB Cloud:
+
+```env
+INFLUXDB_ENABLED=true
+INFLUXDB_URL=https://YOUR-INFLUXDB-CLOUD-HOST
+INFLUXDB_ORG=YOUR_ORG
+INFLUXDB_BUCKET=YOUR_BUCKET
+INFLUXDB_TOKEN=HIER_DEN_LESETOKEN_EINTRAGEN
+```
+
+Den Token nur lokal auf dem Raspberry Pi eintragen und nicht committen. Beispiel für die Messwertzuordnung:
 
 ```yaml
 influxdb:
@@ -146,7 +156,7 @@ Browser im Vollbildmodus
         ▼
 FastAPI-Dashboard ─── SQLite (To-do und lokale Auswahl)
         ├──────────── InfluxDB (Loxone)
-        ├──────────── JSON / iCal (Deadlines und Termine)
+        ├──────────── SQLite (Deadlines, Termine und To-dos)
         ├──────────── Open-Meteo (Wetter)
         └──────────── Marktdatenanbieter (Aktien)
 ```
