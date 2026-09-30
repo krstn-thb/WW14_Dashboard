@@ -6,7 +6,7 @@ Das Projekt ist bewusst schlank aufgebaut: Ein Python-Dienst liefert Daten und O
 
 ## Aktueller Funktionsumfang
 
-- responsive Vollbild-Oberfläche für 16:9-Monitore
+- responsive Vollbild-Oberfläche für 16:9-Monitore, optimiert für Full HD und 4K
 - selbstständige Aktualisierung; Standardintervall 60 Sekunden
 - Loxone-/InfluxDB-Messwerte mit 24-Stunden-Verlauf
 - lokale Deadlines sowie optionale JSON-Feeds
