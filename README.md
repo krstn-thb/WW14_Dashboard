@@ -2,7 +2,7 @@
 
 Vollbild-Dashboard für einen Raspberry Pi 5. Es bündelt Loxone-Klimadaten aus InfluxDB, Journal- und Konferenz-Deadlines, wichtige Kalendertermine, ausgewählte Aktienkurse und eine gemeinsame To-do-Liste.
 
-Das Projekt ist bewusst schlank aufgebaut: Ein Python-Dienst liefert Daten und Oberfläche, Chromium zeigt sie im Kioskmodus. Auf dem Raspberry Pi ist kein KI-Agent notwendig.
+Das Projekt ist bewusst schlank aufgebaut: Ein Python-Dienst liefert Daten und Oberfläche, Chromium zeigt sie im Vollbildmodus. Auf dem Raspberry Pi ist kein KI-Agent notwendig.
 
 ## Aktueller Funktionsumfang
 
@@ -14,7 +14,7 @@ Das Projekt ist bewusst schlank aufgebaut: Ein Python-Dienst liefert Daten und O
 - ausgewählte Aktienkurse; Demo- oder Yahoo-Modus
 - persistente To-do-Liste in SQLite
 - Offline-Anzeige und Fehlerisolierung je Datenquelle
-- automatischer Start als Benutzer-Service und Chromium-Kiosk auf Raspberry Pi OS
+- automatischer Start als Benutzer-Service und Chromium-Vollbild auf Raspberry Pi OS
 
 Ohne Zugangsdaten startet das Dashboard mit gekennzeichneten Beispieldaten. Dadurch kann die Oberfläche sofort geprüft werden.
 
@@ -48,6 +48,8 @@ bash scripts/install-pi.sh
 ```
 
 Das Skript richtet eine eigene Python-Umgebung ein, startet den Dienst automatisch und legt den Chromium-Autostart für den Vollbildmodus an. Nach dem nächsten grafischen Login erscheint das Dashboard automatisch. Es ist zusätzlich im lokalen Netz unter `http://IP-DES-PI:8080` erreichbar.
+
+Der Vollbildmodus lässt sich mit `F11` verlassen. `Alt` + `F4` schließt Chromium vollständig.
 
 Status prüfen:
 
@@ -156,7 +158,7 @@ python -m pytest
 ## Architektur
 
 ```text
-Browser im Kioskmodus
+Browser im Vollbildmodus
         │
         ▼
 FastAPI-Dashboard ─── SQLite (To-do)

@@ -28,7 +28,7 @@ else
 fi
 
 exec "$BROWSER" \
-  --kiosk \
+  --start-fullscreen \
   --noerrdialogs \
   --disable-infobars \
   --disable-session-crashed-bubble \
