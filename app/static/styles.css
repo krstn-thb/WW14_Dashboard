@@ -89,7 +89,7 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
   grid-template-rows: minmax(0, 1fr) minmax(0, .9fr);
   grid-template-areas:
     "climate deadlines stocks"
-    "climate events todos";
+    "weather events todos";
   gap: clamp(12px, 1.15vw, 20px);
 }
 
@@ -104,6 +104,7 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
 .climate-panel { grid-area: climate; }
 .deadlines-panel { grid-area: deadlines; }
 .stocks-panel { grid-area: stocks; }
+.weather-panel { grid-area: weather; }
 .events-panel { grid-area: events; }
 .todos-panel { grid-area: todos; }
 
@@ -116,10 +117,17 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
 }
 .source-state.error { color: var(--red); border-color: rgba(255, 143, 134, .18); background: rgba(255, 143, 134, .08); }
 .source-state.demo { color: var(--orange); border-color: rgba(255, 182, 111, .18); background: rgba(255, 182, 111, .08); }
+.source-state.disabled { color: var(--muted); }
+.panel-actions { display: flex; align-items: center; gap: 7px; }
+.panel-action {
+  width: 28px; height: 28px; border: 1px solid rgba(127, 225, 181, .18); border-radius: 50%;
+  background: rgba(127, 225, 181, .09); color: var(--green); cursor: pointer; font-size: 18px; line-height: 1;
+}
+.panel-action:hover { background: rgba(127, 225, 181, .18); }
 
 .metric-grid { flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 12px; }
 .metric {
-  position: relative; overflow: hidden; min-height: 150px; padding: 18px;
+  position: relative; overflow: hidden; min-height: 118px; padding: 16px;
   display: flex; flex-direction: column; justify-content: space-between;
   border-radius: 18px; border: 1px solid rgba(216, 241, 232, .075); background: rgba(5, 17, 15, .38);
 }
@@ -159,6 +167,20 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
 .stock-row .sparkline polyline { stroke: var(--blue); }
 .stock-row.negative .sparkline polyline { stroke: var(--red); }
 
+.weather-content { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 14px; }
+.weather-current { display: flex; align-items: center; gap: 16px; }
+.weather-current-icon { font-size: clamp(42px, 4vw, 66px); line-height: 1; }
+.weather-current-temp { font-size: clamp(35px, 3.6vw, 58px); font-weight: 580; letter-spacing: -.06em; line-height: 1; }
+.weather-current-copy strong { display: block; margin-bottom: 4px; font-size: 14px; }
+.weather-current-copy span { color: var(--muted); font-size: 10px; }
+.weather-days { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; }
+.weather-day { min-width: 0; padding: 9px 5px; text-align: center; border: 1px solid rgba(216, 241, 232, .075); border-radius: 12px; background: rgba(5, 17, 15, .34); }
+.weather-day strong, .weather-day span { display: block; }
+.weather-day strong { font-size: 10px; text-transform: uppercase; color: var(--muted); }
+.weather-day-icon { margin: 4px 0; font-size: 21px; }
+.weather-day-temp { font-size: 11px; font-variant-numeric: tabular-nums; }
+.weather-day-rain { margin-top: 3px; color: var(--blue); font-size: 9px; }
+
 .todo-form { display: flex; gap: 8px; margin: -2px 0 10px; }
 .todo-form input {
   min-width: 0; flex: 1; padding: 10px 12px; color: var(--text); border-radius: 12px;
@@ -174,6 +196,41 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
 .todo-delete { width: 24px; height: 24px; border: 0; background: none; color: var(--muted); border-radius: 7px; cursor: pointer; font-size: 16px; opacity: .65; }
 .todo-delete:hover { color: var(--red); background: rgba(255, 143, 134, .08); opacity: 1; }
 
+.manage-dialog {
+  width: min(680px, calc(100vw - 32px)); max-height: min(760px, calc(100vh - 32px)); overflow: auto;
+  padding: 24px; color: var(--text); border: 1px solid rgba(200, 231, 220, .18); border-radius: 22px;
+  background: rgba(10, 28, 25, .98); box-shadow: 0 28px 100px rgba(0, 0, 0, .58);
+}
+.manage-dialog::backdrop { background: rgba(1, 8, 7, .78); backdrop-filter: blur(8px); }
+.dialog-heading { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; margin-bottom: 20px; }
+.dialog-heading h2 { margin-top: 4px; font-size: 26px; }
+.dialog-close { width: 36px; height: 36px; border: 1px solid var(--border); border-radius: 11px; background: rgba(255, 255, 255, .04); cursor: pointer; font-size: 22px; }
+.dialog-help { margin: -7px 0 18px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.manage-dialog h3 { margin: 24px 0 10px; color: var(--muted); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
+.manage-form label { display: block; margin-bottom: 7px; color: var(--muted); font-size: 12px; }
+.input-row { display: flex; gap: 8px; }
+.input-row input {
+  min-width: 0; flex: 1; padding: 11px 13px; color: var(--text); border: 1px solid var(--border); border-radius: 12px;
+  outline: 0; background: rgba(5, 17, 15, .55);
+}
+.input-row input:focus { border-color: rgba(131, 230, 185, .48); }
+.input-row button, .primary-button {
+  padding: 10px 15px; border: 0; border-radius: 12px; background: var(--green); color: #071510; cursor: pointer; font-weight: 700;
+}
+.primary-button:disabled, .input-row button:disabled { opacity: .55; cursor: wait; }
+.manage-results, .manage-selected { display: grid; gap: 7px; margin-top: 12px; }
+.manage-result, .manage-selection {
+  width: 100%; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 15px;
+  padding: 11px 12px; border: 1px solid var(--border); border-radius: 12px; background: rgba(5, 17, 15, .42); text-align: left;
+}
+button.manage-result { cursor: pointer; }
+button.manage-result:hover { border-color: rgba(131, 230, 185, .38); background: rgba(35, 72, 62, .52); }
+.manage-result strong, .manage-selection strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.manage-result span, .manage-selection span { color: var(--muted); font-size: 10px; }
+.manage-copy { min-width: 0; }
+.remove-selection { flex: none; width: 28px; height: 28px; border: 0; border-radius: 8px; background: rgba(255, 143, 134, .08); color: var(--red); cursor: pointer; font-size: 17px; }
+.manage-message { padding: 13px; color: var(--muted); border: 1px dashed var(--border); border-radius: 12px; font-size: 12px; }
+
 .empty { display: grid; place-items: center; min-height: 110px; padding: 18px; border: 1px dashed var(--border); border-radius: 16px; color: var(--muted); text-align: center; font-size: 12px; }
 .page-footer { display: flex; justify-content: space-between; padding: 0 4px; color: rgba(171, 198, 189, .65); font-size: 10px; }
 .page-footer b { color: var(--muted); font-weight: 500; }
@@ -186,6 +243,34 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
 @media (min-width: 1100px) and (min-height: 720px) {
   body { height: 100vh; overflow: hidden; }
   .shell { height: 100vh; }
+}
+
+/* Compact logical viewport, for example 4K with "Very Large" desktop scaling. */
+@media (min-width: 1100px) and (max-height: 850px) {
+  .shell { padding: 14px 24px; gap: 10px; }
+  .topbar { min-height: 72px; }
+  .dashboard-grid { gap: 14px; }
+  .panel { padding: 16px 20px; border-radius: 22px; }
+  .panel-heading { margin-bottom: 10px; }
+  .panel-heading h2 { font-size: 21px; }
+  .metric-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); gap: 8px; }
+  .metric { min-height: 0; padding: 10px; border-radius: 14px; }
+  .metric-label { font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .metric-value { font-size: clamp(22px, 2.1vw, 31px); }
+  .sparkline { height: 34px; }
+  .panel-footer { margin-top: 8px; }
+  .list-item, .event-item { padding: 8px 0; }
+  .date-tile { width: 46px; flex-basis: 46px; padding: 6px 3px; }
+  .stock-row { padding: 6px 0; }
+  .stock-row .sparkline { height: 28px; }
+  .weather-content { gap: 8px; }
+  .weather-current-icon { font-size: 44px; }
+  .weather-current-temp { font-size: 38px; }
+  .weather-days { gap: 5px; }
+  .weather-day { padding: 5px 3px; }
+  .weather-day-icon { margin: 2px 0; font-size: 18px; }
+  .todo-form { margin-bottom: 7px; }
+  .todo-item { padding: 7px 0; }
 }
 
 /*
@@ -236,6 +321,7 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
     border-radius: 999px;
     font-size: 16px;
   }
+  .panel-action { width: 44px; height: 44px; font-size: 29px; }
 
   .metric-grid { gap: 24px; }
   .metric { min-height: 260px; padding: 32px; border-radius: 29px; }
@@ -270,6 +356,19 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
   .stock-change { margin-top: 4px; font-size: 15px; }
   .stock-row .sparkline { height: 64px; }
 
+  .weather-content { gap: 24px; }
+  .weather-current { gap: 26px; }
+  .weather-current-icon { font-size: 96px; }
+  .weather-current-temp { font-size: 86px; }
+  .weather-current-copy strong { font-size: 22px; }
+  .weather-current-copy span { font-size: 16px; }
+  .weather-days { gap: 12px; }
+  .weather-day { padding: 15px 8px; border-radius: 19px; }
+  .weather-day strong { font-size: 15px; }
+  .weather-day-icon { margin: 7px 0; font-size: 34px; }
+  .weather-day-temp { font-size: 17px; }
+  .weather-day-rain { margin-top: 5px; font-size: 14px; }
+
   .todo-form { gap: 14px; margin: -3px 0 18px; }
   .todo-form input {
     padding: 17px 20px;
@@ -299,7 +398,7 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
 }
 
 @media (max-width: 1099px) {
-  .dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto; grid-template-areas: "climate climate" "deadlines stocks" "events todos"; }
+  .dashboard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto; grid-template-areas: "climate weather" "deadlines stocks" "events todos"; }
   .climate-panel { min-height: 540px; }
 }
 

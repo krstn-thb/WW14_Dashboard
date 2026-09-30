@@ -43,7 +43,10 @@
               <span class="eyebrow">Loxone · InfluxDB</span>
               <h2>Raumklima</h2>
             </div>
-            <span id="climate-state" class="source-state">Lädt …</span>
+            <div class="panel-actions">
+              <span id="climate-state" class="source-state">Lädt …</span>
+              <button id="climate-manage-button" class="panel-action" type="button" title="InfluxDB-Messwerte auswählen" aria-label="InfluxDB-Messwerte auswählen">+</button>
+            </div>
           </div>
           <div id="climate-content" class="metric-grid loading-block"></div>
           <div class="panel-footer">
@@ -69,10 +72,28 @@
               <span class="eyebrow">Märkte</span>
               <h2>Aktien</h2>
             </div>
-            <span id="stock-state" class="source-state">Lädt …</span>
+            <div class="panel-actions">
+              <span id="stock-state" class="source-state">Lädt …</span>
+              <button id="stock-manage-button" class="panel-action" type="button" title="Aktien suchen und verwalten" aria-label="Aktien suchen und verwalten">+</button>
+            </div>
           </div>
           <div id="stock-content" class="stock-list loading-block"></div>
           <div class="panel-footer"><span id="stock-message"></span></div>
+        </article>
+
+        <article class="panel weather-panel">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">Vorhersage</span>
+              <h2>Wetter</h2>
+            </div>
+            <span id="weather-state" class="source-state">Lädt …</span>
+          </div>
+          <div id="weather-content" class="weather-content loading-block"></div>
+          <div class="panel-footer">
+            <span id="weather-location">Brandenburg an der Havel</span>
+            <span id="weather-updated"></span>
+          </div>
         </article>
 
         <article class="panel events-panel">
@@ -108,6 +129,35 @@
         <span>Automatische Aktualisierung <b id="refresh-interval">–</b></span>
       </footer>
     </main>
+
+    <dialog id="stock-dialog" class="manage-dialog">
+      <div class="dialog-heading">
+        <div><span class="eyebrow">Märkte</span><h2>Aktien auswählen</h2></div>
+        <button class="dialog-close" type="button" data-close-dialog="stock-dialog" aria-label="Schließen">×</button>
+      </div>
+      <form id="stock-search-form" class="manage-form">
+        <label for="stock-search-input">Unternehmen oder Börsenkürzel</label>
+        <div class="input-row">
+          <input id="stock-search-input" maxlength="80" autocomplete="off" placeholder="z. B. Vonovia" />
+          <button type="submit">Suchen</button>
+        </div>
+      </form>
+      <div id="stock-search-results" class="manage-results"></div>
+      <h3>Aktiv</h3>
+      <div id="stock-selected" class="manage-selected"></div>
+    </dialog>
+
+    <dialog id="climate-dialog" class="manage-dialog">
+      <div class="dialog-heading">
+        <div><span class="eyebrow">Loxone · InfluxDB</span><h2>Messwerte auswählen</h2></div>
+        <button class="dialog-close" type="button" data-close-dialog="climate-dialog" aria-label="Schließen">×</button>
+      </div>
+      <p class="dialog-help">Die Liste zeigt Messfelder, die innerhalb der letzten 30 Tage Daten geliefert haben.</p>
+      <button id="influx-discover-button" class="primary-button" type="button">InfluxDB durchsuchen</button>
+      <div id="influx-discovery-results" class="manage-results"></div>
+      <h3>Im Dashboard</h3>
+      <div id="climate-selected" class="manage-selected"></div>
+    </dialog>
 
     <div id="toast" class="toast" role="alert" aria-live="assertive"></div>
     <script src="/app.js" defer></script>

@@ -4,6 +4,8 @@ const state = {
   refreshSeconds: 60,
   refreshTimer: null,
   toastTimer: null,
+  selectedStocks: [],
+  selectedClimateMetrics: [],
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -79,7 +81,13 @@ function sparkline(values, id, extraClass = "") {
 
 function sourceState(element, status) {
   element.className = `source-state ${status || ""}`;
-  element.textContent = status === "live" ? "Live" : status === "error" ? "Störung" : "Demo";
+  element.textContent = status === "live"
+    ? "Live"
+    : status === "error"
+      ? "Störung"
+      : status === "disabled"
+        ? "Aus"
+        : "Demo";
 }
 
 function renderClimate(climate) {
@@ -160,6 +168,40 @@ function renderStocks(stocks) {
   target.classList.remove("loading-block");
 }
 
+function renderWeather(weather) {
+  sourceState($("#weather-state"), weather.status);
+  $("#weather-location").textContent = weather.location || "Brandenburg an der Havel";
+  $("#weather-updated").textContent = weather.updated_at
+    ? `Stand ${formatDate(weather.updated_at, { hour: "2-digit", minute: "2-digit" })}`
+    : "";
+  const target = $("#weather-content");
+  const current = weather.current;
+  const daily = weather.daily || [];
+  if (!current || !daily.length) {
+    target.innerHTML = `<div class="empty">${escapeHtml(weather.message || "Keine Wetterdaten vorhanden")}</div>`;
+  } else {
+    target.innerHTML = `
+      <div class="weather-current">
+        <div class="weather-current-icon" aria-hidden="true">${escapeHtml(current.icon)}</div>
+        <div class="weather-current-temp">${formatNumber(current.temperature, 1)}°</div>
+        <div class="weather-current-copy">
+          <strong>${escapeHtml(current.label)}</strong>
+          <span>Gefühlt ${formatNumber(current.apparent_temperature, 1)} °C · Wind ${formatNumber(current.wind_speed, 0)} km/h</span>
+        </div>
+      </div>
+      <div class="weather-days">
+        ${daily.slice(0, 5).map((day) => `<div class="weather-day" title="${escapeHtml(day.label)}">
+          <strong>${formatDate(`${day.date}T12:00:00`, { weekday: "short" })}</strong>
+          <span class="weather-day-icon" aria-hidden="true">${escapeHtml(day.icon)}</span>
+          <span class="weather-day-temp">${formatNumber(day.temperature_max, 0)}° / ${formatNumber(day.temperature_min, 0)}°</span>
+          <span class="weather-day-rain">${formatNumber(day.precipitation_probability, 0)} %</span>
+        </div>`).join("")}
+      </div>`;
+  }
+  target.classList.remove("loading-block");
+  if (weather.status === "error" && weather.message) showToast(weather.message);
+}
+
 function renderTodos(items) {
   const openCount = items.filter((item) => !item.done).length;
   $("#todo-count").textContent = openCount;
@@ -202,6 +244,7 @@ async function loadDashboard() {
     renderDeadlines(data.deadlines);
     renderEvents(data.events);
     renderStocks(data.stocks);
+    renderWeather(data.weather || { status: "disabled", daily: [] });
     renderTodos(data.todos);
     const connection = $("#connection");
     connection.className = "connection online";
@@ -216,6 +259,173 @@ async function loadDashboard() {
     state.refreshTimer = window.setTimeout(loadDashboard, state.refreshSeconds * 1000);
   }
 }
+
+function renderStockSelections(items) {
+  state.selectedStocks = items;
+  const target = $("#stock-selected");
+  target.innerHTML = items.length
+    ? items.map((item) => `<div class="manage-selection">
+      <div class="manage-copy"><strong>${escapeHtml(item.label || item.symbol)}</strong><span>${escapeHtml(item.symbol)}</span></div>
+      <button class="remove-selection" type="button" data-remove-stock="${escapeHtml(item.symbol)}" aria-label="${escapeHtml(item.label || item.symbol)} entfernen">×</button>
+    </div>`).join("")
+    : '<div class="manage-message">Noch keine Aktie ausgewählt.</div>';
+}
+
+async function refreshStockSelections() {
+  renderStockSelections(await request("/api/stocks"));
+}
+
+function renderClimateSelections(items) {
+  state.selectedClimateMetrics = items;
+  const target = $("#climate-selected");
+  target.innerHTML = items.length
+    ? items.map((item) => `<div class="manage-selection">
+      <div class="manage-copy"><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.measurement)} · ${escapeHtml(item.field)}${item.unit ? ` · ${escapeHtml(item.unit)}` : ""}</span></div>
+      <button class="remove-selection" type="button" data-remove-climate="${Number(item.id)}" aria-label="${escapeHtml(item.label)} entfernen">×</button>
+    </div>`).join("")
+    : '<div class="manage-message">Noch kein InfluxDB-Messwert ausgewählt.</div>';
+}
+
+async function refreshClimateSelections() {
+  renderClimateSelections(await request("/api/climate/metrics"));
+}
+
+$("#stock-manage-button").addEventListener("click", async () => {
+  $("#stock-dialog").showModal();
+  $("#stock-search-results").innerHTML = '<div class="manage-message">Nach Unternehmen oder Börsenkürzel suchen.</div>';
+  try {
+    await refreshStockSelections();
+    $("#stock-search-input").focus();
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+$("#stock-search-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const input = $("#stock-search-input");
+  const query = input.value.trim();
+  if (query.length < 2) return;
+  const button = event.currentTarget.querySelector("button");
+  const target = $("#stock-search-results");
+  button.disabled = true;
+  target.innerHTML = '<div class="manage-message">Suche läuft …</div>';
+  try {
+    const items = await request(`/api/stocks/search?q=${encodeURIComponent(query)}`);
+    target.innerHTML = items.length
+      ? items.map((item) => `<button class="manage-result" type="button" data-add-stock="${escapeHtml(item.symbol)}" data-stock-label="${escapeHtml(item.label)}">
+        <span class="manage-copy"><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.symbol)}${item.exchange ? ` · ${escapeHtml(item.exchange)}` : ""}</span></span>
+        <span>Hinzufügen</span>
+      </button>`).join("")
+      : '<div class="manage-message">Keine passende Aktie gefunden.</div>';
+  } catch (error) {
+    target.innerHTML = `<div class="manage-message">${escapeHtml(error.message)}</div>`;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("#stock-search-results").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-add-stock]");
+  if (!button) return;
+  button.disabled = true;
+  try {
+    await request("/api/stocks", {
+      method: "POST",
+      body: JSON.stringify({ symbol: button.dataset.addStock, label: button.dataset.stockLabel }),
+    });
+    await refreshStockSelections();
+    await loadDashboard();
+    showToast(`${button.dataset.stockLabel} wurde hinzugefügt.`);
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("#stock-selected").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-remove-stock]");
+  if (!button) return;
+  try {
+    await request(`/api/stocks/${encodeURIComponent(button.dataset.removeStock)}`, { method: "DELETE" });
+    await refreshStockSelections();
+    await loadDashboard();
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+$("#climate-manage-button").addEventListener("click", async () => {
+  $("#climate-dialog").showModal();
+  $("#influx-discovery-results").innerHTML = '<div class="manage-message">„InfluxDB durchsuchen“ lädt verfügbare Messfelder.</div>';
+  try {
+    await refreshClimateSelections();
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+$("#influx-discover-button").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  const target = $("#influx-discovery-results");
+  button.disabled = true;
+  target.innerHTML = '<div class="manage-message">InfluxDB wird durchsucht …</div>';
+  try {
+    const data = await request("/api/influx/fields");
+    const selected = new Set(state.selectedClimateMetrics.map((item) => `${item.measurement}\u0000${item.field}`));
+    const items = (data.items || []).filter((item) => !selected.has(`${item.measurement}\u0000${item.field}`));
+    target.innerHTML = items.length
+      ? items.map((item) => `<button class="manage-result" type="button" data-add-measurement="${escapeHtml(item.measurement)}" data-add-field="${escapeHtml(item.field)}">
+        <span class="manage-copy"><strong>${escapeHtml(item.field)}</strong><span>${escapeHtml(item.measurement)} · ${escapeHtml(data.bucket)}</span></span>
+        <span>Hinzufügen</span>
+      </button>`).join("")
+      : '<div class="manage-message">Keine weiteren Messfelder mit aktuellen Daten gefunden.</div>';
+  } catch (error) {
+    target.innerHTML = `<div class="manage-message">${escapeHtml(error.message)}</div>`;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("#influx-discovery-results").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-add-measurement]");
+  if (!button) return;
+  button.disabled = true;
+  try {
+    await request("/api/climate/metrics", {
+      method: "POST",
+      body: JSON.stringify({ measurement: button.dataset.addMeasurement, field: button.dataset.addField }),
+    });
+    button.remove();
+    await refreshClimateSelections();
+    await loadDashboard();
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+$("#climate-selected").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-remove-climate]");
+  if (!button) return;
+  try {
+    await request(`/api/climate/metrics/${button.dataset.removeClimate}`, { method: "DELETE" });
+    await refreshClimateSelections();
+    await loadDashboard();
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+document.querySelectorAll("[data-close-dialog]").forEach((button) => {
+  button.addEventListener("click", () => $(`#${button.dataset.closeDialog}`).close());
+});
+
+document.querySelectorAll("dialog").forEach((dialog) => {
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+});
 
 $("#todo-form").addEventListener("submit", async (event) => {
   event.preventDefault();

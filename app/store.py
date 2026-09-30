@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,41 @@ class TodoStore:
                     done INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS stocks (
+                    symbol TEXT PRIMARY KEY COLLATE NOCASE,
+                    label TEXT NOT NULL,
+                    currency TEXT NOT NULL DEFAULT '',
+                    sort_order INTEGER NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS climate_metrics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    measurement TEXT NOT NULL,
+                    field TEXT NOT NULL,
+                    label TEXT NOT NULL,
+                    unit TEXT NOT NULL DEFAULT '',
+                    decimals INTEGER NOT NULL DEFAULT 1,
+                    tags TEXT NOT NULL DEFAULT '{}',
+                    sort_order INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(measurement, field, tags)
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS app_meta (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
                 )
                 """
             )
@@ -97,5 +133,179 @@ class TodoStore:
     def delete(self, todo_id: int) -> bool:
         with self._connect() as connection:
             cursor = connection.execute("DELETE FROM todos WHERE id = ?", (todo_id,))
+        return cursor.rowcount > 0
+
+    def _seed_once(self, key: str, callback: Any) -> None:
+        with self._connect() as connection:
+            seeded = connection.execute(
+                "SELECT 1 FROM app_meta WHERE key = ?", (key,)
+            ).fetchone()
+            if seeded:
+                return
+            callback(connection)
+            connection.execute(
+                "INSERT INTO app_meta (key, value) VALUES (?, ?)", (key, "1")
+            )
+
+    def seed_stocks(self, items: list[dict[str, Any]]) -> None:
+        now = datetime.now(UTC).isoformat()
+
+        def seed(connection: sqlite3.Connection) -> None:
+            for index, item in enumerate(items):
+                symbol = str(item.get("symbol", "")).strip().upper()
+                if not symbol:
+                    continue
+                connection.execute(
+                    """
+                    INSERT OR IGNORE INTO stocks
+                        (symbol, label, currency, sort_order, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        symbol,
+                        str(item.get("label") or symbol).strip(),
+                        str(item.get("currency", "")).strip().upper(),
+                        index,
+                        now,
+                    ),
+                )
+
+        self._seed_once("stocks_seeded_v1", seed)
+
+    def list_stocks(self) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT symbol, label, currency FROM stocks ORDER BY sort_order, created_at"
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def add_stock(self, symbol: str, label: str, currency: str = "") -> dict[str, Any]:
+        symbol = symbol.strip().upper()
+        label = label.strip() or symbol
+        now = datetime.now(UTC).isoformat()
+        with self._connect() as connection:
+            next_order = connection.execute(
+                "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM stocks"
+            ).fetchone()[0]
+            connection.execute(
+                """
+                INSERT INTO stocks (symbol, label, currency, sort_order, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(symbol) DO UPDATE SET
+                    label = excluded.label,
+                    currency = CASE WHEN excluded.currency = '' THEN stocks.currency ELSE excluded.currency END
+                """,
+                (symbol, label, currency.strip().upper(), next_order, now),
+            )
+            row = connection.execute(
+                "SELECT symbol, label, currency FROM stocks WHERE symbol = ?", (symbol,)
+            ).fetchone()
+        return dict(row)
+
+    def delete_stock(self, symbol: str) -> bool:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM stocks WHERE symbol = ?", (symbol.strip().upper(),)
+            )
+        return cursor.rowcount > 0
+
+    def seed_climate_metrics(self, items: list[dict[str, Any]]) -> None:
+        now = datetime.now(UTC).isoformat()
+
+        def seed(connection: sqlite3.Connection) -> None:
+            for index, item in enumerate(items):
+                measurement = str(item.get("measurement", "")).strip()
+                field = str(item.get("field", "")).strip()
+                if not measurement or not field:
+                    continue
+                connection.execute(
+                    """
+                    INSERT OR IGNORE INTO climate_metrics
+                        (measurement, field, label, unit, decimals, tags, sort_order, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        measurement,
+                        field,
+                        str(item.get("label") or field).strip(),
+                        str(item.get("unit", "")).strip(),
+                        int(item.get("decimals", 1)),
+                        json.dumps(item.get("tags", {}), sort_keys=True),
+                        index,
+                        now,
+                    ),
+                )
+
+        self._seed_once("climate_metrics_seeded_v1", seed)
+
+    @staticmethod
+    def _climate_metric(row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "id": row["id"],
+            "measurement": row["measurement"],
+            "field": row["field"],
+            "label": row["label"],
+            "unit": row["unit"],
+            "decimals": row["decimals"],
+            "tags": json.loads(row["tags"] or "{}"),
+        }
+
+    def list_climate_metrics(self) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM climate_metrics ORDER BY sort_order, created_at"
+            ).fetchall()
+        return [self._climate_metric(row) for row in rows]
+
+    def add_climate_metric(
+        self,
+        measurement: str,
+        field: str,
+        label: str,
+        unit: str = "",
+        decimals: int = 1,
+        tags: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        tag_json = json.dumps(tags or {}, sort_keys=True)
+        now = datetime.now(UTC).isoformat()
+        with self._connect() as connection:
+            next_order = connection.execute(
+                "SELECT COALESCE(MAX(sort_order), -1) + 1 FROM climate_metrics"
+            ).fetchone()[0]
+            connection.execute(
+                """
+                INSERT INTO climate_metrics
+                    (measurement, field, label, unit, decimals, tags, sort_order, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(measurement, field, tags) DO UPDATE SET
+                    label = excluded.label,
+                    unit = excluded.unit,
+                    decimals = excluded.decimals
+                """,
+                (
+                    measurement.strip(),
+                    field.strip(),
+                    label.strip() or field.strip(),
+                    unit.strip(),
+                    decimals,
+                    tag_json,
+                    next_order,
+                    now,
+                ),
+            )
+            row = connection.execute(
+                """
+                SELECT * FROM climate_metrics
+                WHERE measurement = ? AND field = ? AND tags = ?
+                """,
+                (measurement.strip(), field.strip(), tag_json),
+            ).fetchone()
+        return self._climate_metric(row)
+
+    def delete_climate_metric(self, metric_id: int) -> bool:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM climate_metrics WHERE id = ?", (metric_id,)
+            )
         return cursor.rowcount > 0
 

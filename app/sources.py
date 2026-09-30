@@ -174,13 +174,58 @@ def _query_influx_sync(config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def discover_influx_fields(config: dict[str, Any]) -> list[dict[str, str]]:
+    """Return measurement/field pairs that currently contain data."""
+    from influxdb_client import InfluxDBClient
+
+    influx = config.get("influxdb", {})
+    url = influx.get("url", "")
+    token = influx.get("token", "")
+    org = influx.get("org", "")
+    bucket = influx.get("bucket", "")
+    if not all((url, token, org, bucket)):
+        raise ValueError("InfluxDB URL, Token, Organisation oder Bucket fehlt")
+
+    lookback = influx.get("discovery_range", "-30d")
+    query = (
+        f'from(bucket: "{_flux_escape(bucket)}")\n'
+        f"  |> range(start: {lookback})\n"
+        '  |> group(columns: ["_measurement", "_field"])\n'
+        "  |> last()\n"
+        '  |> keep(columns: ["_measurement", "_field", "_value"])'
+    )
+    found: set[tuple[str, str]] = set()
+    with InfluxDBClient(url=url, token=token, org=org, timeout=15_000) as client:
+        for table in client.query_api().query(query=query, org=org):
+            for record in table.records:
+                measurement = str(record.values.get("_measurement", "")).strip()
+                field = str(record.values.get("_field", "")).strip()
+                value = record.get_value()
+                if (
+                    measurement
+                    and field
+                    and isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                ):
+                    found.add((measurement, field))
+    return [
+        {"measurement": measurement, "field": field}
+        for measurement, field in sorted(found, key=lambda item: (item[0].lower(), item[1].lower()))
+    ]
+
+
 async def get_climate(config: dict[str, Any]) -> dict[str, Any]:
     if not config.get("influxdb", {}).get("enabled", False):
         return _demo_climate(config)
     try:
         ttl = int(config.get("climate", {}).get("cache_seconds", 60))
+        selection = json.dumps(
+            config.get("climate", {}).get("metrics", []), sort_keys=True, default=str
+        )
         return await _cache.get_or_load(
-            "climate", ttl, lambda: asyncio.to_thread(_query_influx_sync, config)
+            f"climate:{selection}",
+            ttl,
+            lambda: asyncio.to_thread(_query_influx_sync, config),
         )
     except Exception as exc:  # external source must not take down the display
         fallback = _demo_climate(config)
@@ -334,6 +379,49 @@ async def _fetch_yahoo_stock(symbol: str) -> dict[str, Any]:
     }
 
 
+async def search_stocks(query: str) -> list[dict[str, str]]:
+    params = {
+        "q": query,
+        "quotesCount": "10",
+        "newsCount": "0",
+        "enableFuzzyQuery": "true",
+        "lang": "de-DE",
+        "region": "DE",
+    }
+    headers = {"User-Agent": "WW14-Dashboard/1.0"}
+
+    async def load() -> list[dict[str, str]]:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+            response = await client.get(
+                "https://query2.finance.yahoo.com/v1/finance/search",
+                params=params,
+                headers=headers,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        results: list[dict[str, str]] = []
+        for item in payload.get("quotes", []):
+            if item.get("quoteType") not in {"EQUITY", "ETF"}:
+                continue
+            symbol = str(item.get("symbol", "")).strip().upper()
+            if not symbol:
+                continue
+            results.append(
+                {
+                    "symbol": symbol,
+                    "label": str(
+                        item.get("longname") or item.get("shortname") or symbol
+                    ),
+                    "exchange": str(
+                        item.get("exchDisp") or item.get("exchange") or ""
+                    ),
+                }
+            )
+        return results
+
+    return await _cache.get_or_load(f"stock-search:{query.lower()}", 900, load)
+
+
 def _demo_stocks(section: dict[str, Any]) -> list[dict[str, Any]]:
     defaults = [
         {"symbol": "SAP.DE", "label": "SAP", "price": 232.4, "currency": "EUR"},
@@ -376,8 +464,9 @@ async def get_stocks(config: dict[str, Any]) -> dict[str, Any]:
         return results
 
     try:
+        symbols = ",".join(item.get("symbol", "") for item in section.get("symbols", []))
         items = await _cache.get_or_load(
-            "stocks", int(section.get("cache_seconds", 300)), load
+            f"stocks:{symbols}", int(section.get("cache_seconds", 300)), load
         )
         return {"status": "live", "items": items}
     except Exception as exc:
@@ -385,5 +474,102 @@ async def get_stocks(config: dict[str, Any]) -> dict[str, Any]:
             "status": "error",
             "message": f"Aktienkurse nicht erreichbar: {exc}",
             "items": _demo_stocks(section),
+        }
+
+
+def _weather_description(code: int) -> tuple[str, str]:
+    if code == 0:
+        return "Klar", "☀️"
+    if code in {1, 2}:
+        return "Leicht bewölkt", "🌤️"
+    if code == 3:
+        return "Bedeckt", "☁️"
+    if code in {45, 48}:
+        return "Nebel", "🌫️"
+    if code in {51, 53, 55, 56, 57}:
+        return "Nieselregen", "🌦️"
+    if code in {61, 63, 65, 66, 67}:
+        return "Regen", "🌧️"
+    if code in {71, 73, 75, 77}:
+        return "Schnee", "🌨️"
+    if code in {80, 81, 82}:
+        return "Regenschauer", "🌦️"
+    if code in {85, 86}:
+        return "Schneeschauer", "🌨️"
+    if code in {95, 96, 99}:
+        return "Gewitter", "⛈️"
+    return "Wechselhaft", "🌥️"
+
+
+async def get_weather(config: dict[str, Any]) -> dict[str, Any]:
+    section = config.get("weather", {})
+    if not section.get("enabled", False):
+        return {"status": "disabled", "location": section.get("location", ""), "daily": []}
+
+    async def load() -> dict[str, Any]:
+        params = {
+            "latitude": section.get("latitude", 52.4125),
+            "longitude": section.get("longitude", 12.5316),
+            "current": "temperature_2m,apparent_temperature,weather_code,wind_speed_10m",
+            "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+            "timezone": section.get("timezone", "Europe/Berlin"),
+            "forecast_days": max(1, min(int(section.get("forecast_days", 5)), 7)),
+        }
+        async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
+            response = await client.get(
+                "https://api.open-meteo.com/v1/forecast", params=params
+            )
+            response.raise_for_status()
+            payload = response.json()
+
+        current = payload.get("current", {})
+        current_code = int(current.get("weather_code", -1))
+        current_label, current_icon = _weather_description(current_code)
+        daily = payload.get("daily", {})
+        items: list[dict[str, Any]] = []
+        dates = daily.get("time", [])
+        for index, day in enumerate(dates):
+            code = int(daily.get("weather_code", [-1] * len(dates))[index])
+            label, icon = _weather_description(code)
+            items.append(
+                {
+                    "date": day,
+                    "weather_code": code,
+                    "label": label,
+                    "icon": icon,
+                    "temperature_max": daily.get("temperature_2m_max", [None] * len(dates))[index],
+                    "temperature_min": daily.get("temperature_2m_min", [None] * len(dates))[index],
+                    "precipitation_probability": daily.get(
+                        "precipitation_probability_max", [None] * len(dates)
+                    )[index],
+                }
+            )
+        return {
+            "status": "live",
+            "location": section.get("location", "Brandenburg an der Havel"),
+            "current": {
+                "temperature": current.get("temperature_2m"),
+                "apparent_temperature": current.get("apparent_temperature"),
+                "wind_speed": current.get("wind_speed_10m"),
+                "weather_code": current_code,
+                "label": current_label,
+                "icon": current_icon,
+            },
+            "daily": items,
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+
+    try:
+        return await _cache.get_or_load(
+            "weather",
+            int(section.get("cache_seconds", 900)),
+            load,
+        )
+    except Exception as exc:
+        return {
+            "status": "error",
+            "location": section.get("location", "Brandenburg an der Havel"),
+            "message": f"Wettervorhersage nicht erreichbar: {exc}",
+            "daily": [],
         }
 

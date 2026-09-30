@@ -64,6 +64,7 @@ def test_health_and_dashboard(tmp_path: Path) -> None:
     assert dashboard.status_code == 200
     assert dashboard.json()["settings"]["title"] == "Test Dashboard"
     assert dashboard.json()["climate"]["status"] == "demo"
+    assert dashboard.json()["weather"]["status"] == "disabled"
     assert dashboard.json()["deadlines"]["items"][0]["title"] == "Test deadline"
 
 
@@ -88,4 +89,36 @@ def test_blank_todo_is_rejected(tmp_path: Path) -> None:
         response = client.post("/api/todos", json={"text": "   "})
 
     assert response.status_code == 422
+
+
+def test_stock_selection_lifecycle(tmp_path: Path) -> None:
+    app = create_app(make_config(tmp_path))
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/stocks", json={"symbol": "VNA.DE", "label": "Vonovia"}
+        )
+        listed = client.get("/api/stocks")
+        deleted = client.delete("/api/stocks/VNA.DE")
+
+    assert created.status_code == 201
+    assert listed.json() == [
+        {"symbol": "VNA.DE", "label": "Vonovia", "currency": ""}
+    ]
+    assert deleted.status_code == 204
+
+
+def test_climate_metric_selection_lifecycle(tmp_path: Path) -> None:
+    app = create_app(make_config(tmp_path))
+    with TestClient(app) as client:
+        current = client.get("/api/climate/metrics")
+        created = client.post(
+            "/api/climate/metrics",
+            json={"measurement": "loxone", "field": "temperature"},
+        )
+        deleted = client.delete(f'/api/climate/metrics/{created.json()["id"]}')
+
+    assert current.json() == []
+    assert created.status_code == 201
+    assert created.json()["unit"] == "°C"
+    assert deleted.status_code == 204
 

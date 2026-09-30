@@ -9,9 +9,11 @@ Das Projekt ist bewusst schlank aufgebaut: Ein Python-Dienst liefert Daten und O
 - responsive Vollbild-Oberfläche für 16:9-Monitore, optimiert für Full HD und 4K
 - selbstständige Aktualisierung; Standardintervall 60 Sekunden
 - Loxone-/InfluxDB-Messwerte mit 24-Stunden-Verlauf
+- Auswahl vorhandener InfluxDB-Messfelder direkt im Dashboard
 - lokale Deadlines sowie optionale JSON-Feeds
 - lokale Termine sowie optionale iCal-/ICS-Kalender
-- ausgewählte Aktienkurse; Demo- oder Yahoo-Modus
+- Wettervorhersage für Brandenburg an der Havel
+- Aktienkurse mit Suche, Hinzufügen und Entfernen im Dashboard
 - persistente To-do-Liste in SQLite
 - Offline-Anzeige und Fehlerisolierung je Datenquelle
 - automatischer Start als Benutzer-Service und Chromium-Vollbild auf Raspberry Pi OS
@@ -72,15 +74,17 @@ Die sichtbaren Inhalte stehen in `config/dashboard.yaml`. Zugangsdaten gehören 
 
 ### InfluxDB aktivieren
 
-1. `.env.example` nach `.env` kopieren und URL, Organisation, Bucket und Token eintragen.
-2. In `config/dashboard.yaml` unter `influxdb` den Wert `enabled: true` setzen.
-3. Unter `climate.metrics` Measurement, Field und Tags an das vorhandene InfluxDB-Schema anpassen.
+1. In `.env` URL, Organisation, Bucket und Token eintragen und `INFLUXDB_ENABLED=true` setzen.
+2. Den Dashboard-Dienst neu starten.
+3. Im Dashboard bei **Raumklima** auf **+** klicken, **InfluxDB durchsuchen** wählen und die gewünschten Felder hinzufügen.
+
+Die Auswahl wird lokal in `data/dashboard.db` gespeichert und verursacht deshalb keine Konflikte bei `git pull`. Beim ersten Start sind die Definitionen aus `config/dashboard.yaml` vorausgewählt und können im Auswahlfenster entfernt werden.
 
 Beispiel:
 
 ```yaml
 influxdb:
-  enabled: true
+  enabled: ${INFLUXDB_ENABLED:-false}
 
 climate:
   range: "-24h"
@@ -125,19 +129,13 @@ Private Kalender-URLs sollten später ebenfalls über Umgebungsvariablen eingebu
 
 ### Aktien
 
-Für echte, zeitverzögerte Kurse ohne API-Schlüssel:
-
-```yaml
-stocks:
-  enabled: true
-  provider: yahoo
-  symbols:
-    - { symbol: "SAP.DE", label: SAP }
-    - { symbol: "SIE.DE", label: Siemens }
-    - { symbol: "AAPL", label: Apple }
-```
+Vonovia (`VNA.DE`) ist standardmäßig die erste Aktie. Über **+** im Aktienfeld kann nach einem Unternehmen oder Börsenkürzel gesucht werden. Ein Treffer wird per Klick hinzugefügt; ausgewählte Aktien lassen sich im selben Fenster wieder entfernen.
 
 Die Yahoo-Schnittstelle ist nicht vertraglich garantiert. Für einen dauerhaften Produktivbetrieb sollte später ein offizieller Marktdatenanbieter mit API-Schlüssel ergänzt werden.
+
+### Wetter
+
+Die Vorhersage für Brandenburg an der Havel wird ohne API-Schlüssel von [Open-Meteo](https://open-meteo.com/) geladen. Ort, Koordinaten und Anzahl der Vorhersagetage stehen unter `weather` in `config/dashboard.yaml`.
 
 ## Docker-Alternative
 
@@ -161,9 +159,10 @@ python -m pytest
 Browser im Vollbildmodus
         │
         ▼
-FastAPI-Dashboard ─── SQLite (To-do)
+FastAPI-Dashboard ─── SQLite (To-do und lokale Auswahl)
         ├──────────── InfluxDB (Loxone)
         ├──────────── JSON / iCal (Deadlines und Termine)
+        ├──────────── Open-Meteo (Wetter)
         └──────────── Marktdatenanbieter (Aktien)
 ```
 
