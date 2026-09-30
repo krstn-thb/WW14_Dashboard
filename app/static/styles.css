@@ -136,6 +136,34 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
 .sparkline polyline { fill: none; stroke: var(--green); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 .sparkline .spark-fill { fill: url(#spark-gradient); stroke: none; opacity: .25; }
 
+/* Fit additional room sensors into the fixed wall-display panel. */
+.metric-grid.metric-grid--dense {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.metric-grid--dense .metric {
+  min-height: 0;
+  padding: 11px 12px;
+  border-radius: 14px;
+}
+.metric-grid--dense .metric-label {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.metric-grid--dense .metric-value { font-size: clamp(24px, 2.25vw, 38px); }
+.metric-grid--dense .sparkline { height: 30px; }
+
+.metric-grid.metric-grid--packed {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+.metric-grid--packed .metric { padding: 8px 9px; border-radius: 12px; }
+.metric-grid--packed .metric-label { font-size: 10.5px; }
+.metric-grid--packed .metric-value { font-size: clamp(20px, 1.8vw, 31px); }
+.metric-grid--packed .sparkline { height: 20px; }
+
 .panel-footer { display: flex; justify-content: space-between; gap: 12px; margin-top: 15px; color: var(--muted); font-size: 11.5px; }
 .list, .event-list, .stock-list, .todo-list { min-height: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: rgba(131, 230, 185, .2) transparent; }
 .list-item, .event-item {
@@ -367,6 +395,18 @@ button.manage-result:hover { border-color: rgba(131, 230, 185, .38); background:
   .sparkline { height: 78px; }
   .sparkline polyline { stroke-width: 3.5; }
   .panel-footer { gap: 20px; margin-top: 25px; font-size: 16px; }
+
+  .metric-grid.metric-grid--dense { gap: 16px; }
+  .metric-grid--dense .metric { min-height: 0; padding: 20px; border-radius: 22px; }
+  .metric-grid--dense .metric-label { font-size: 18px; }
+  .metric-grid--dense .metric-value { font-size: clamp(48px, 1.8vw, 70px); }
+  .metric-grid--dense .sparkline { height: 46px; }
+
+  .metric-grid.metric-grid--packed { gap: 12px; }
+  .metric-grid--packed .metric { padding: 14px 16px; border-radius: 18px; }
+  .metric-grid--packed .metric-label { font-size: 15px; }
+  .metric-grid--packed .metric-value { font-size: clamp(38px, 1.45vw, 56px); }
+  .metric-grid--packed .sparkline { height: 32px; }
 
   .list-item, .event-item { gap: 22px; padding: 22px 0; }
   .date-tile {

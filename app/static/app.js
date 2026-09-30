@@ -114,10 +114,12 @@ function renderClimate(climate) {
     : "";
   const target = $("#climate-content");
   const metrics = climate.metrics || [];
+  target.classList.toggle("metric-grid--dense", metrics.length >= 3);
+  target.classList.toggle("metric-grid--packed", metrics.length >= 7);
   target.innerHTML = metrics.length
     ? metrics.map((metric, index) => `
       <section class="metric">
-        <span class="metric-label">${escapeHtml(metric.label)}</span>
+        <span class="metric-label" title="${escapeHtml(metric.label)}">${escapeHtml(metric.label)}</span>
         <div class="metric-value">${formatNumber(metric.value, metric.decimals ?? 1)}<span class="metric-unit">${escapeHtml(metric.unit)}</span></div>
         ${sparkline(metric.points || [], `climate-${index}`)}
       </section>`).join("")
