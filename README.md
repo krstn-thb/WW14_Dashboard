@@ -12,7 +12,7 @@ Das Projekt ist bewusst schlank aufgebaut: Ein Python-Dienst liefert Daten und O
 - Auswahl vorhandener InfluxDB-Messfelder direkt im Dashboard
 - lokale Deadlines sowie optionale JSON-Feeds
 - lokale Termine sowie optionale iCal-/ICS-Kalender
-- Wettervorhersage für Brandenburg an der Havel
+- Wetter für Brandenburg an der Havel mit Tagesverlauf und animierter DWD-Regenvorschau für die nächsten zwei Stunden
 - Aktienkurse mit Suche, Hinzufügen und Entfernen im Dashboard
 - persistente To-do-Liste in SQLite
 - Offline-Anzeige und Fehlerisolierung je Datenquelle
@@ -133,9 +133,11 @@ Vonovia (`VNA.DE`) ist standardmäßig die erste Aktie. Über **+** im Aktienfel
 
 Die Yahoo-Schnittstelle ist nicht vertraglich garantiert. Für einen dauerhaften Produktivbetrieb sollte später ein offizieller Marktdatenanbieter mit API-Schlüssel ergänzt werden.
 
-### Wetter
+### Wetter und Regenradar
 
-Die Vorhersage für Brandenburg an der Havel wird ohne API-Schlüssel von [Open-Meteo](https://open-meteo.com/) geladen. Ort, Koordinaten und Anzahl der Vorhersagetage stehen unter `weather` in `config/dashboard.yaml`.
+Die Vorhersage für Brandenburg an der Havel wird ohne API-Schlüssel von [Open-Meteo](https://open-meteo.com/) geladen. Sie enthält den Tagesverlauf in Drei-Stunden-Schritten. Ort, Koordinaten und Anzahl der Vorhersagetage stehen unter `weather` in `config/dashboard.yaml`.
+
+Das Regenradar nutzt das amtliche RADVOR-Produkt des Deutschen Wetterdienstes und spielt die verfügbaren Vorhersagebilder automatisch ab. Der grüne Punkt markiert Brandenburg an der Havel; das Zeitfeld wechselt von **jetzt** bis ungefähr **+120 min**. Damit die Karte auf dem Raspberry Pi erscheint, muss Chromium ausgehend auf `api.open-meteo.com`, `maps.dwd.de` und `tile.openstreetmap.org` zugreifen können.
 
 ## Docker-Alternative
 

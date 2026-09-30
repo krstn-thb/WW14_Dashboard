@@ -3,6 +3,8 @@ const state = {
   timezone: "Europe/Berlin",
   refreshSeconds: 60,
   refreshTimer: null,
+  radarTimer: null,
+  radarFrames: [],
   toastTimer: null,
   selectedStocks: [],
   selectedClimateMetrics: [],
@@ -168,7 +170,96 @@ function renderStocks(stocks) {
   target.classList.remove("loading-block");
 }
 
+function radarMap(radar) {
+  if (!radar?.frames?.length) {
+    state.radarFrames = [];
+    return '<div class="radar-map radar-unavailable"><span>Radar momentan nicht verfügbar</span></div>';
+  }
+  const latitude = Number(radar.latitude);
+  const longitude = Number(radar.longitude);
+  const zoom = Number(radar.zoom) || 7;
+  const tileCount = 2 ** zoom;
+  const latitudeRadians = latitude * Math.PI / 180;
+  const tileX = ((longitude + 180) / 360) * tileCount;
+  const tileY = (1 - Math.asinh(Math.tan(latitudeRadians)) / Math.PI) / 2 * tileCount;
+  const firstX = Math.floor(tileX) - 1;
+  const firstY = Math.floor(tileY) - 1;
+  const markerX = (1 + tileX - Math.floor(tileX)) * 256;
+  const markerY = (1 + tileY - Math.floor(tileY)) * 256;
+  const originShift = 20037508.342789244;
+  const tileMeters = (originShift * 2) / tileCount;
+  const bbox = [
+    -originShift + firstX * tileMeters,
+    originShift - (firstY + 3) * tileMeters,
+    -originShift + (firstX + 3) * tileMeters,
+    originShift - firstY * tileMeters,
+  ].join(",");
+  const tiles = [];
+  for (let row = 0; row < 3; row += 1) {
+    for (let column = 0; column < 3; column += 1) {
+      const x = (firstX + column + tileCount) % tileCount;
+      const y = firstY + row;
+      const baseUrl = `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`;
+      tiles.push(`<div class="radar-tile"><img src="${escapeHtml(baseUrl)}" alt="" /></div>`);
+    }
+  }
+
+  const endpoint = "https://maps.dwd.de/geoserver/dwd/wms";
+  const layer = "dwd:Radar_rv_product_1x1km_ger";
+  state.radarFrames = radar.frames.map((frame) => {
+    const query = new URLSearchParams({
+      service: "WMS",
+      version: "1.1.1",
+      request: "GetMap",
+      layers: layer,
+      styles: "",
+      bbox,
+      width: "768",
+      height: "768",
+      srs: "EPSG:3857",
+      format: "image/png",
+      transparent: "true",
+      time: frame.time,
+    });
+    return { ...frame, url: `${endpoint}?${query.toString()}` };
+  });
+  const first = state.radarFrames[0];
+  return `<div class="radar-map" title="DWD-Niederschlagsradar mit Vorhersage für die nächsten zwei Stunden">
+    <div class="radar-tile-grid" style="left:calc(50% - ${markerX.toFixed(1)}px);top:calc(50% - ${markerY.toFixed(1)}px)">${tiles.join("")}<img id="radar-frame" class="radar-frame" src="${escapeHtml(first.url)}" alt="Animierte Niederschlagsvorhersage" /></div>
+    <span class="radar-marker" aria-label="Brandenburg an der Havel"></span>
+    <span id="radar-time" class="radar-time">Radar jetzt · ${formatDate(first.time, { hour: "2-digit", minute: "2-digit" })}</span>
+    <span class="radar-live"><i></i> 2 h Vorschau</span>
+    <span class="radar-attribution"><a href="https://www.dwd.de/" target="_blank" rel="noopener">DWD</a> · © OpenStreetMap</span>
+  </div>`;
+}
+
+function startRadarAnimation() {
+  window.clearInterval(state.radarTimer);
+  state.radarTimer = null;
+  const image = $("#radar-frame");
+  const label = $("#radar-time");
+  if (!image || !label || !state.radarFrames.length) return;
+
+  state.radarFrames.slice(1).forEach((frame) => {
+    const preload = new Image();
+    preload.src = frame.url;
+  });
+  if (state.radarFrames.length === 1) return;
+
+  let index = 0;
+  state.radarTimer = window.setInterval(() => {
+    index = (index + 1) % state.radarFrames.length;
+    const frame = state.radarFrames[index];
+    image.src = frame.url;
+    const offset = Number(frame.minutes_ahead) > 0 ? `+${frame.minutes_ahead} min` : "jetzt";
+    label.textContent = `Radar ${offset} · ${formatDate(frame.time, { hour: "2-digit", minute: "2-digit" })}`;
+  }, 950);
+}
+
 function renderWeather(weather) {
+  window.clearInterval(state.radarTimer);
+  state.radarTimer = null;
+  state.radarFrames = [];
   sourceState($("#weather-state"), weather.status);
   $("#weather-location").textContent = weather.location || "Brandenburg an der Havel";
   $("#weather-updated").textContent = weather.updated_at
@@ -176,18 +267,32 @@ function renderWeather(weather) {
     : "";
   const target = $("#weather-content");
   const current = weather.current;
+  const hourly = weather.hourly || [];
   const daily = weather.daily || [];
   if (!current || !daily.length) {
     target.innerHTML = `<div class="empty">${escapeHtml(weather.message || "Keine Wetterdaten vorhanden")}</div>`;
   } else {
     target.innerHTML = `
-      <div class="weather-current">
-        <div class="weather-current-icon" aria-hidden="true">${escapeHtml(current.icon)}</div>
-        <div class="weather-current-temp">${formatNumber(current.temperature, 1)}°</div>
-        <div class="weather-current-copy">
-          <strong>${escapeHtml(current.label)}</strong>
-          <span>Gefühlt ${formatNumber(current.apparent_temperature, 1)} °C · Wind ${formatNumber(current.wind_speed, 0)} km/h</span>
+      <div class="weather-top">
+        <div class="weather-current">
+          <div class="weather-current-icon" aria-hidden="true">${escapeHtml(current.icon)}</div>
+          <div>
+            <div class="weather-current-temp">${formatNumber(current.temperature, 1)}°</div>
+            <div class="weather-current-copy">
+              <strong>${escapeHtml(current.label)}</strong>
+              <span>Gefühlt ${formatNumber(current.apparent_temperature, 1)} °C · Wind ${formatNumber(current.wind_speed, 0)} km/h</span>
+            </div>
+          </div>
         </div>
+        ${radarMap(weather.radar)}
+      </div>
+      <div class="weather-hourly" aria-label="Wetterverlauf heute">
+        ${hourly.map((hour) => `<div class="weather-hour ${hour.is_current ? "current" : ""}" title="${escapeHtml(hour.label)} · ${formatNumber(hour.precipitation_probability, 0)} % Regen">
+          <strong>${formatDate(hour.time, { hour: "2-digit", minute: "2-digit" })}</strong>
+          <span class="weather-hour-icon" aria-hidden="true">${escapeHtml(hour.icon)}</span>
+          <span class="weather-hour-temp">${formatNumber(hour.temperature, 0)}°</span>
+          <span class="weather-hour-rain">${formatNumber(hour.precipitation_probability, 0)} %</span>
+        </div>`).join("")}
       </div>
       <div class="weather-days">
         ${daily.slice(0, 5).map((day) => `<div class="weather-day" title="${escapeHtml(day.label)}">
@@ -197,6 +302,7 @@ function renderWeather(weather) {
           <span class="weather-day-rain">${formatNumber(day.precipitation_probability, 0)} %</span>
         </div>`).join("")}
       </div>`;
+    startRadarAnimation();
   }
   target.classList.remove("loading-block");
   if (weather.status === "error" && weather.message) showToast(weather.message);

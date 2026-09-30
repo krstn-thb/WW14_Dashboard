@@ -3,11 +3,13 @@ from __future__ import annotations
 import asyncio
 import json
 import math
+import re
 import time
 from datetime import UTC, date, datetime, time as datetime_time, timedelta
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 from urllib.parse import quote
+from xml.etree import ElementTree
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -501,16 +503,133 @@ def _weather_description(code: int) -> tuple[str, str]:
     return "Wechselhaft", "🌥️"
 
 
+def _parse_radar_time(value: str) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _expand_radar_times(value: str) -> list[datetime]:
+    times: list[datetime] = []
+    for item in value.split(","):
+        parts = [part.strip() for part in item.strip().split("/")]
+        if len(parts) == 1:
+            parsed = _parse_radar_time(parts[0])
+            if parsed:
+                times.append(parsed)
+            continue
+        if len(parts) != 3:
+            continue
+        start = _parse_radar_time(parts[0])
+        end = _parse_radar_time(parts[1])
+        duration = re.fullmatch(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", parts[2])
+        if not start or not end or not duration:
+            continue
+        step = timedelta(
+            hours=int(duration.group(1) or 0),
+            minutes=int(duration.group(2) or 0),
+            seconds=int(duration.group(3) or 0),
+        )
+        if step <= timedelta(0):
+            continue
+        cursor = start
+        while cursor <= end and len(times) < 5000:
+            times.append(cursor)
+            cursor += step
+    return sorted(set(times))
+
+
+def _radar_frames_from_capabilities(
+    content: bytes, now: datetime | None = None
+) -> list[dict[str, Any]]:
+    root = ElementTree.fromstring(content)
+    layer_name = "Radar_rv_product_1x1km_ger"
+    dimension_value = ""
+
+    for layer in root.iter():
+        if layer.tag.rsplit("}", 1)[-1] != "Layer":
+            continue
+        name = next(
+            (
+                (child.text or "").strip()
+                for child in layer
+                if child.tag.rsplit("}", 1)[-1] == "Name"
+            ),
+            "",
+        )
+        if name.rsplit(":", 1)[-1] != layer_name:
+            continue
+        dimension_value = next(
+            (
+                (child.text or "").strip()
+                for child in layer
+                if child.tag.rsplit("}", 1)[-1] in {"Dimension", "Extent"}
+                and child.attrib.get("name", "").lower() == "time"
+                and (child.text or "").strip()
+            ),
+            "",
+        )
+        break
+
+    reference = (now or datetime.now(UTC)).astimezone(UTC)
+    available = _expand_radar_times(dimension_value)
+    if not available:
+        return []
+
+    current = max(
+        (item for item in available if item <= reference),
+        default=None,
+    )
+    if not current:
+        return []
+    candidates = [
+        item
+        for item in available
+        if current <= item <= current + timedelta(hours=2, minutes=5)
+    ]
+    if not candidates:
+        return []
+
+    # The source offers five-minute steps. Fifteen-minute animation frames keep
+    # the wall display fluid without repeatedly loading dozens of large maps.
+    selected = [candidates[0]]
+    for item in candidates[1:]:
+        if item - selected[-1] >= timedelta(minutes=15):
+            selected.append(item)
+    if candidates[-1] - selected[-1] >= timedelta(minutes=8):
+        selected.append(candidates[-1])
+
+    return [
+        {
+            "time": item.isoformat().replace("+00:00", "Z"),
+            "minutes_ahead": max(
+                0, int(round((item - reference).total_seconds() / 300) * 5)
+            ),
+        }
+        for item in selected
+    ]
+
+
 async def get_weather(config: dict[str, Any]) -> dict[str, Any]:
     section = config.get("weather", {})
     if not section.get("enabled", False):
-        return {"status": "disabled", "location": section.get("location", ""), "daily": []}
+        return {
+            "status": "disabled",
+            "location": section.get("location", ""),
+            "hourly": [],
+            "daily": [],
+        }
 
     async def load() -> dict[str, Any]:
         params = {
             "latitude": section.get("latitude", 52.4125),
             "longitude": section.get("longitude", 12.5316),
             "current": "temperature_2m,apparent_temperature,weather_code,wind_speed_10m",
+            "hourly": "temperature_2m,weather_code,precipitation_probability",
             "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
             "timezone": section.get("timezone", "Europe/Berlin"),
             "forecast_days": max(1, min(int(section.get("forecast_days", 5)), 7)),
@@ -521,10 +640,69 @@ async def get_weather(config: dict[str, Any]) -> dict[str, Any]:
             )
             response.raise_for_status()
             payload = response.json()
+            radar: dict[str, Any] | None = None
+            try:
+                radar_response = await client.get(
+                    "https://maps.dwd.de/geoserver/dwd/wms",
+                    params={
+                        "service": "WMS",
+                        "version": "1.1.1",
+                        "request": "GetCapabilities",
+                    },
+                )
+                radar_response.raise_for_status()
+                frames = _radar_frames_from_capabilities(radar_response.content)
+                if frames:
+                    radar = {
+                        "endpoint": "https://maps.dwd.de/geoserver/dwd/wms",
+                        "layer": "dwd:Radar_rv_product_1x1km_ger",
+                        "frames": frames,
+                        "latitude": float(params["latitude"]),
+                        "longitude": float(params["longitude"]),
+                        "zoom": 7,
+                        "source": "DWD RADVOR",
+                    }
+            except Exception:
+                # Radar is optional; forecast data should remain available.
+                radar = None
 
         current = payload.get("current", {})
         current_code = int(current.get("weather_code", -1))
         current_label, current_icon = _weather_description(current_code)
+
+        hourly = payload.get("hourly", {})
+        hourly_times = hourly.get("time", [])
+        current_time = datetime.fromisoformat(
+            current.get("time") or datetime.now().isoformat(timespec="minutes")
+        )
+        hourly_items: list[dict[str, Any]] = []
+        for index, timestamp in enumerate(hourly_times):
+            forecast_time = datetime.fromisoformat(timestamp)
+            if forecast_time.date() != current_time.date() or forecast_time.hour % 3:
+                continue
+            codes = hourly.get("weather_code", [])
+            temperatures = hourly.get("temperature_2m", [])
+            precipitation = hourly.get("precipitation_probability", [])
+            code = int(codes[index]) if index < len(codes) else -1
+            label, icon = _weather_description(code)
+            hourly_items.append(
+                {
+                    "time": timestamp,
+                    "weather_code": code,
+                    "label": label,
+                    "icon": icon,
+                    "temperature": temperatures[index]
+                    if index < len(temperatures)
+                    else None,
+                    "precipitation_probability": precipitation[index]
+                    if index < len(precipitation)
+                    else None,
+                    "is_current": forecast_time.hour
+                    <= current_time.hour
+                    < forecast_time.hour + 3,
+                }
+            )
+
         daily = payload.get("daily", {})
         items: list[dict[str, Any]] = []
         dates = daily.get("time", [])
@@ -555,7 +733,9 @@ async def get_weather(config: dict[str, Any]) -> dict[str, Any]:
                 "label": current_label,
                 "icon": current_icon,
             },
+            "hourly": hourly_items,
             "daily": items,
+            "radar": radar,
             "updated_at": datetime.now(UTC).isoformat(),
         }
 
@@ -570,6 +750,8 @@ async def get_weather(config: dict[str, Any]) -> dict[str, Any]:
             "status": "error",
             "location": section.get("location", "Brandenburg an der Havel"),
             "message": f"Wettervorhersage nicht erreichbar: {exc}",
+            "hourly": [],
             "daily": [],
+            "radar": None,
         }
 
