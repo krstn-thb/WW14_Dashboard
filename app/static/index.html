@@ -136,6 +136,17 @@
       </footer>
     </main>
 
+    <dialog id="radar-dialog" class="radar-dialog" aria-labelledby="radar-dialog-title">
+      <div class="radar-dialog-heading">
+        <div>
+          <span class="eyebrow">DWD · nächste 2 Stunden</span>
+          <h2 id="radar-dialog-title">Regenradar Brandenburg an der Havel</h2>
+        </div>
+        <button class="dialog-close" type="button" data-close-dialog="radar-dialog" aria-label="Radar schließen">×</button>
+      </div>
+      <div id="radar-dialog-content" class="radar-dialog-content"></div>
+    </dialog>
+
     <dialog id="stock-dialog" class="manage-dialog">
       <div class="dialog-heading">
         <div><span class="eyebrow">Märkte</span><h2>Aktien auswählen</h2></div>

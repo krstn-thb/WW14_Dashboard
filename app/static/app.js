@@ -5,6 +5,7 @@ const state = {
   refreshTimer: null,
   radarTimer: null,
   radarFrames: [],
+  radarOrigin: null,
   toastTimer: null,
   selectedStocks: [],
   selectedClimateMetrics: [],
@@ -240,13 +241,33 @@ function radarMap(radar) {
     return { ...frame, url: `${endpoint}?${query.toString()}` };
   });
   const first = state.radarFrames[0];
-  return `<div class="radar-map" title="DWD-Niederschlagsradar mit Vorhersage für die nächsten zwei Stunden">
-    <div class="radar-tile-grid" style="left:calc(50% - ${markerX.toFixed(1)}px);top:calc(50% - ${markerY.toFixed(1)}px)">${tiles.join("")}<img id="radar-frame" class="radar-frame" src="${escapeHtml(first.url)}" decoding="async" alt="Animierte Niederschlagsvorhersage" /></div>
+  return `<div class="radar-map" role="button" tabindex="0" aria-label="Regenradar groß öffnen" title="Regenradar groß öffnen">
+    <div class="radar-tile-grid" style="--radar-marker-x:${markerX.toFixed(1)}px;--radar-marker-y:${markerY.toFixed(1)}px;left:calc(50% - ${markerX.toFixed(1)}px);top:calc(50% - ${markerY.toFixed(1)}px)">${tiles.join("")}<img id="radar-frame" class="radar-frame" src="${escapeHtml(first.url)}" decoding="async" alt="Animierte Niederschlagsvorhersage" /></div>
     <span class="radar-marker" aria-label="Brandenburg an der Havel"></span>
     <span id="radar-time" class="radar-time">Radar jetzt · ${formatDate(first.time, { hour: "2-digit", minute: "2-digit" })}</span>
     <span class="radar-live"><i></i> 2 h Vorschau</span>
+    <span class="radar-expand-hint" aria-hidden="true">⛶</span>
     <span class="radar-attribution"><a href="https://www.dwd.de/" target="_blank" rel="noopener">DWD</a> · © OpenStreetMap</span>
   </div>`;
+}
+
+function openRadarDialog(map) {
+  const dialog = $("#radar-dialog");
+  if (!map || dialog.open) return;
+  state.radarOrigin = { parent: map.parentNode, nextSibling: map.nextSibling };
+  map.classList.add("radar-map--expanded");
+  $("#radar-dialog-content").append(map);
+  dialog.showModal();
+}
+
+function restoreRadarMap() {
+  const map = $("#radar-dialog-content .radar-map");
+  if (!map || !state.radarOrigin) return;
+  const { parent, nextSibling } = state.radarOrigin;
+  map.classList.remove("radar-map--expanded");
+  if (nextSibling?.parentNode === parent) parent.insertBefore(map, nextSibling);
+  else parent.append(map);
+  state.radarOrigin = null;
 }
 
 function startRadarAnimation() {
@@ -274,6 +295,9 @@ function startRadarAnimation() {
 }
 
 function renderWeather(weather) {
+  const radarDialog = $("#radar-dialog");
+  if (radarDialog.open) radarDialog.close();
+  restoreRadarMap();
   window.clearInterval(state.radarTimer);
   state.radarTimer = null;
   state.radarFrames = [];
@@ -687,6 +711,23 @@ document.querySelectorAll("dialog").forEach((dialog) => {
   dialog.addEventListener("click", (event) => {
     if (event.target === dialog) dialog.close();
   });
+});
+
+$("#radar-dialog").addEventListener("close", restoreRadarMap);
+
+$("#weather-content").addEventListener("click", (event) => {
+  if (event.target.closest("a")) return;
+  const map = event.target.closest(".radar-map:not(.radar-unavailable)");
+  if (map) openRadarDialog(map);
+});
+
+$("#weather-content").addEventListener("keydown", (event) => {
+  if (event.target.closest("a")) return;
+  if (!['Enter', ' '].includes(event.key)) return;
+  const map = event.target.closest(".radar-map:not(.radar-unavailable)");
+  if (!map) return;
+  event.preventDefault();
+  openRadarDialog(map);
 });
 
 $("#todo-form").addEventListener("submit", async (event) => {
