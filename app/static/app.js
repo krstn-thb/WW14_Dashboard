@@ -8,6 +8,8 @@ const state = {
   toastTimer: null,
   selectedStocks: [],
   selectedClimateMetrics: [],
+  selectedDeadlines: [],
+  selectedEvents: [],
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -396,6 +398,47 @@ async function refreshClimateSelections() {
   renderClimateSelections(await request("/api/climate/metrics"));
 }
 
+function manualDateLabel(value) {
+  return formatDate(value, {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function renderDeadlineSelections(items) {
+  state.selectedDeadlines = items;
+  const target = $("#deadline-selected");
+  target.innerHTML = items.length
+    ? items.map((item) => `<div class="manage-selection">
+      <div class="manage-copy"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.kind || "Deadline")} · ${manualDateLabel(item.due)}</span></div>
+      <button class="remove-selection" type="button" data-remove-deadline="${Number(item.id)}" aria-label="${escapeHtml(item.title)} entfernen">×</button>
+    </div>`).join("")
+    : '<div class="manage-message">Noch keine Deadline eingetragen.</div>';
+}
+
+async function refreshDeadlineSelections() {
+  renderDeadlineSelections(await request("/api/deadlines"));
+}
+
+function renderEventSelections(items) {
+  state.selectedEvents = items;
+  const target = $("#event-selected");
+  target.innerHTML = items.length
+    ? items.map((item) => `<div class="manage-selection">
+      <div class="manage-copy"><strong>${escapeHtml(item.title)}</strong><span>${manualDateLabel(item.start)}${item.location ? ` · ${escapeHtml(item.location)}` : ""}</span></div>
+      <button class="remove-selection" type="button" data-remove-event="${Number(item.id)}" aria-label="${escapeHtml(item.title)} entfernen">×</button>
+    </div>`).join("")
+    : '<div class="manage-message">Noch kein Termin eingetragen.</div>';
+}
+
+async function refreshEventSelections() {
+  renderEventSelections(await request("/api/events"));
+}
+
 $("#stock-manage-button").addEventListener("click", async () => {
   $("#stock-dialog").showModal();
   $("#stock-search-results").innerHTML = '<div class="manage-message">Nach Unternehmen oder Börsenkürzel suchen.</div>';
@@ -517,6 +560,100 @@ $("#climate-selected").addEventListener("click", async (event) => {
   try {
     await request(`/api/climate/metrics/${button.dataset.removeClimate}`, { method: "DELETE" });
     await refreshClimateSelections();
+    await loadDashboard();
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+$("#deadline-manage-button").addEventListener("click", async () => {
+  $("#deadline-dialog").showModal();
+  try {
+    await refreshDeadlineSelections();
+    $("#deadline-title").focus();
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+$("#deadline-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = event.currentTarget.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    await request("/api/deadlines", {
+      method: "POST",
+      body: JSON.stringify({
+        title: $("#deadline-title").value.trim(),
+        due: $("#deadline-due").value,
+        kind: $("#deadline-kind").value.trim() || "Deadline",
+      }),
+    });
+    event.currentTarget.reset();
+    await refreshDeadlineSelections();
+    await loadDashboard();
+    $("#deadline-title").focus();
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("#deadline-selected").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-remove-deadline]");
+  if (!button) return;
+  try {
+    await request(`/api/deadlines/${button.dataset.removeDeadline}`, { method: "DELETE" });
+    await refreshDeadlineSelections();
+    await loadDashboard();
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+$("#event-manage-button").addEventListener("click", async () => {
+  $("#event-dialog").showModal();
+  try {
+    await refreshEventSelections();
+    $("#event-title").focus();
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+$("#event-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = event.currentTarget.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    const end = $("#event-end").value;
+    await request("/api/events", {
+      method: "POST",
+      body: JSON.stringify({
+        title: $("#event-title").value.trim(),
+        start: $("#event-start").value,
+        end: end || null,
+        location: $("#event-location").value.trim(),
+      }),
+    });
+    event.currentTarget.reset();
+    await refreshEventSelections();
+    await loadDashboard();
+    $("#event-title").focus();
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("#event-selected").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-remove-event]");
+  if (!button) return;
+  try {
+    await request(`/api/events/${button.dataset.removeEvent}`, { method: "DELETE" });
+    await refreshEventSelections();
     await loadDashboard();
   } catch (error) {
     showToast(error.message);

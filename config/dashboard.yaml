@@ -52,19 +52,14 @@ climate:
     - { id: pressure, label: Luftdruck, value: 1017, unit: hPa, decimals: 0 }
 
 deadlines:
+  # Wird nur beim ersten Start einmalig in die lokale Datenbank übernommen.
   file: "data/deadlines.json"
-  json_feeds: []
   horizon_days: 365
-  cache_seconds: 900
 
 events:
+  # Wird nur beim ersten Start einmalig in die lokale Datenbank übernommen.
   file: "data/events.json"
   horizon_days: 90
-  cache_seconds: 300
-  ical: []
-  # Beispiel für einen eingebundenen Kalender:
-  #  - name: Hochschulkalender
-  #    url: "https://example.org/calendar.ics"
 
 stocks:
   enabled: true

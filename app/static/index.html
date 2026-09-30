@@ -61,7 +61,10 @@
               <span class="eyebrow">Publikationen</span>
               <h2>Deadlines</h2>
             </div>
-            <span class="panel-count" id="deadline-count">0</span>
+            <div class="panel-actions">
+              <span class="panel-count" id="deadline-count">0</span>
+              <button id="deadline-manage-button" class="panel-action" type="button" title="Deadline eintragen" aria-label="Deadline eintragen">+</button>
+            </div>
           </div>
           <div id="deadline-content" class="list loading-block"></div>
         </article>
@@ -102,7 +105,10 @@
               <span class="eyebrow">Kalender</span>
               <h2>Wichtige Termine</h2>
             </div>
-            <span class="panel-count" id="event-count">0</span>
+            <div class="panel-actions">
+              <span class="panel-count" id="event-count">0</span>
+              <button id="event-manage-button" class="panel-action" type="button" title="Termin eintragen" aria-label="Termin eintragen">+</button>
+            </div>
           </div>
           <div id="event-content" class="event-list loading-block"></div>
         </article>
@@ -157,6 +163,51 @@
       <div id="influx-discovery-results" class="manage-results"></div>
       <h3>Im Dashboard</h3>
       <div id="climate-selected" class="manage-selected"></div>
+    </dialog>
+
+    <dialog id="deadline-dialog" class="manage-dialog">
+      <div class="dialog-heading">
+        <div><span class="eyebrow">Publikationen</span><h2>Deadline eintragen</h2></div>
+        <button class="dialog-close" type="button" data-close-dialog="deadline-dialog" aria-label="Schließen">×</button>
+      </div>
+      <form id="deadline-form" class="manual-form">
+        <label class="wide">Titel
+          <input id="deadline-title" maxlength="240" required autocomplete="off" placeholder="z. B. Abstract einreichen" />
+        </label>
+        <label>Fällig am
+          <input id="deadline-due" type="datetime-local" required />
+        </label>
+        <label>Art
+          <input id="deadline-kind" maxlength="80" autocomplete="off" placeholder="Konferenz oder Journal" />
+        </label>
+        <button class="primary-button wide" type="submit">Deadline hinzufügen</button>
+      </form>
+      <h3>Eingetragene Deadlines</h3>
+      <div id="deadline-selected" class="manage-selected"></div>
+    </dialog>
+
+    <dialog id="event-dialog" class="manage-dialog">
+      <div class="dialog-heading">
+        <div><span class="eyebrow">Kalender</span><h2>Termin eintragen</h2></div>
+        <button class="dialog-close" type="button" data-close-dialog="event-dialog" aria-label="Schließen">×</button>
+      </div>
+      <form id="event-form" class="manual-form">
+        <label class="wide">Titel
+          <input id="event-title" maxlength="240" required autocomplete="off" placeholder="z. B. Projektbesprechung" />
+        </label>
+        <label>Beginn
+          <input id="event-start" type="datetime-local" required />
+        </label>
+        <label>Ende (optional)
+          <input id="event-end" type="datetime-local" />
+        </label>
+        <label class="wide">Ort (optional)
+          <input id="event-location" maxlength="160" autocomplete="off" placeholder="z. B. WW14" />
+        </label>
+        <button class="primary-button wide" type="submit">Termin hinzufügen</button>
+      </form>
+      <h3>Eingetragene Termine</h3>
+      <div id="event-selected" class="manage-selected"></div>
     </dialog>
 
     <div id="toast" class="toast" role="alert" aria-live="assertive"></div>

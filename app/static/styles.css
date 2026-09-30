@@ -21,6 +21,7 @@ html, body { min-height: 100%; }
 
 body {
   margin: 0;
+  font-size: 16px;
   color: var(--text);
   background:
     radial-gradient(circle at 12% 12%, rgba(39, 128, 101, 0.2), transparent 30%),
@@ -62,10 +63,10 @@ button { color: inherit; }
 }
 h1, h2, p { margin: 0; }
 h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 680; }
-.brand p { margin-top: 3px; color: var(--muted); font-size: 13px; letter-spacing: .04em; }
+.brand p { margin-top: 3px; color: var(--muted); font-size: 14px; letter-spacing: .04em; }
 .topbar-right { display: flex; align-items: center; gap: 14px; }
 .connection {
-  display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px;
+  display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px;
   padding: 8px 11px; border: 1px solid var(--border); border-radius: 999px; background: rgba(8, 23, 20, .55);
 }
 .connection-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--orange); box-shadow: 0 0 12px currentColor; }
@@ -79,7 +80,7 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
 .icon-button svg { width: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 .clock { min-width: 124px; text-align: right; }
 .clock strong { display: block; font-size: clamp(23px, 2vw, 32px); line-height: 1; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
-.clock span { color: var(--muted); font-size: 12px; text-transform: capitalize; }
+.clock span { color: var(--muted); font-size: 13px; text-transform: capitalize; }
 
 .dashboard-grid {
   flex: 1;
@@ -110,10 +111,10 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
 
 .panel-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 15px; margin-bottom: 18px; }
 .panel-heading h2 { margin-top: 3px; font-size: clamp(21px, 1.55vw, 29px); font-weight: 620; letter-spacing: -.035em; }
-.eyebrow { color: var(--green); font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
+.eyebrow { color: var(--green); font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; }
 .source-state, .panel-count {
   flex: none; padding: 6px 9px; border-radius: 999px; background: rgba(127, 225, 181, .09);
-  color: var(--green); border: 1px solid rgba(127, 225, 181, .11); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--green); border: 1px solid rgba(127, 225, 181, .11); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
 }
 .source-state.error { color: var(--red); border-color: rgba(255, 143, 134, .18); background: rgba(255, 143, 134, .08); }
 .source-state.demo { color: var(--orange); border-color: rgba(255, 182, 111, .18); background: rgba(255, 182, 111, .08); }
@@ -132,36 +133,36 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
   border-radius: 18px; border: 1px solid rgba(216, 241, 232, .075); background: rgba(5, 17, 15, .38);
 }
 .metric::after { content: ""; position: absolute; inset: auto 0 0; height: 55%; background: linear-gradient(to top, rgba(77, 204, 154, .055), transparent); pointer-events: none; }
-.metric-label { position: relative; z-index: 1; color: var(--muted); font-size: 13px; }
+.metric-label { position: relative; z-index: 1; color: var(--muted); font-size: 14px; }
 .metric-value { position: relative; z-index: 1; font-size: clamp(30px, 3vw, 49px); font-weight: 580; letter-spacing: -.06em; line-height: 1; font-variant-numeric: tabular-nums; }
 .metric-unit { color: var(--muted); margin-left: 5px; font-size: .37em; font-weight: 500; letter-spacing: 0; }
 .sparkline { width: 100%; height: 44px; overflow: visible; }
 .sparkline polyline { fill: none; stroke: var(--green); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 .sparkline .spark-fill { fill: url(#spark-gradient); stroke: none; opacity: .25; }
 
-.panel-footer { display: flex; justify-content: space-between; gap: 12px; margin-top: 15px; color: var(--muted); font-size: 10px; }
+.panel-footer { display: flex; justify-content: space-between; gap: 12px; margin-top: 15px; color: var(--muted); font-size: 11.5px; }
 .list, .event-list, .stock-list, .todo-list { min-height: 0; overflow: auto; scrollbar-width: thin; scrollbar-color: rgba(131, 230, 185, .2) transparent; }
 .list-item, .event-item {
   display: flex; gap: 13px; align-items: center; padding: 13px 0; border-top: 1px solid rgba(219, 240, 232, .07);
 }
 .list-item:first-child, .event-item:first-child { border-top: 0; padding-top: 2px; }
 .date-tile { width: 50px; flex: 0 0 50px; text-align: center; padding: 8px 3px; border-radius: 13px; background: rgba(131, 230, 185, .08); }
-.date-tile strong { display: block; font-size: 19px; line-height: 1; }
-.date-tile span { color: var(--green); font-size: 9px; text-transform: uppercase; font-weight: 700; }
+.date-tile strong { display: block; font-size: 20px; line-height: 1; }
+.date-tile span { color: var(--green); font-size: 10px; text-transform: uppercase; font-weight: 700; }
 .item-main { min-width: 0; flex: 1; }
-.item-main strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 580; }
-.item-meta { display: flex; gap: 7px; margin-top: 4px; color: var(--muted); font-size: 10px; }
+.item-main strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14.5px; font-weight: 580; }
+.item-meta { display: flex; gap: 7px; margin-top: 4px; color: var(--muted); font-size: 11.5px; }
 .item-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.urgency { flex: 0 0 auto; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.urgency { flex: 0 0 auto; color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .urgency.soon { color: var(--orange); }
 .urgency.now { color: var(--red); }
 
 .stock-row { display: grid; grid-template-columns: minmax(75px, 1fr) minmax(70px, 1fr) minmax(85px, 1.1fr); align-items: center; gap: 10px; padding: 14px 0; border-top: 1px solid rgba(219, 240, 232, .07); }
 .stock-row:first-child { border-top: 0; padding-top: 2px; }
-.stock-name strong { display: block; font-size: 13px; }
-.stock-name span { color: var(--muted); font-size: 9px; }
-.stock-price { text-align: right; font-size: 14px; font-weight: 580; font-variant-numeric: tabular-nums; }
-.stock-change { display: block; margin-top: 2px; font-size: 9px; color: var(--green); }
+.stock-name strong { display: block; font-size: 14.5px; }
+.stock-name span { color: var(--muted); font-size: 10.5px; }
+.stock-price { text-align: right; font-size: 15.5px; font-weight: 580; font-variant-numeric: tabular-nums; }
+.stock-change { display: block; margin-top: 2px; font-size: 10.5px; color: var(--green); }
 .stock-change.negative { color: var(--red); }
 .stock-row .sparkline { height: 36px; }
 .stock-row .sparkline polyline { stroke: var(--blue); }
@@ -172,15 +173,15 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
 .weather-current { min-width: 0; display: flex; align-items: center; gap: 12px; }
 .weather-current-icon { font-size: clamp(42px, 4vw, 66px); line-height: 1; }
 .weather-current-temp { font-size: clamp(35px, 3.6vw, 58px); font-weight: 580; letter-spacing: -.06em; line-height: 1; }
-.weather-current-copy strong { display: block; margin-bottom: 4px; font-size: 14px; }
-.weather-current-copy span { color: var(--muted); font-size: 10px; }
+.weather-current-copy strong { display: block; margin-bottom: 4px; font-size: 15px; }
+.weather-current-copy span { color: var(--muted); font-size: 11.5px; }
 .radar-map { position: relative; min-width: 0; height: 94px; overflow: hidden; border: 1px solid rgba(139, 197, 255, .16); border-radius: 13px; background: #0a1c1d; isolation: isolate; }
 .radar-tile-grid { position: absolute; width: 768px; height: 768px; display: grid; grid-template-columns: repeat(3, 256px); grid-template-rows: repeat(3, 256px); }
 .radar-tile { position: relative; width: 256px; height: 256px; }
 .radar-tile img { position: absolute; inset: 0; width: 256px; height: 256px; filter: brightness(.5) saturate(.55) hue-rotate(115deg); }
 .radar-frame { position: absolute; z-index: 1; inset: 0; width: 768px; height: 768px; opacity: .84; pointer-events: none; }
 .radar-marker { position: absolute; z-index: 2; left: 50%; top: 50%; width: 9px; height: 9px; border: 2px solid white; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 4px rgba(6, 16, 15, .48), 0 0 16px rgba(131, 230, 185, .9); transform: translate(-50%, -50%); }
-.radar-time, .radar-live, .radar-attribution { position: absolute; z-index: 2; padding: 2px 5px; border-radius: 5px; background: rgba(4, 13, 12, .8); color: rgba(237, 247, 243, .88); font-size: 7px; }
+.radar-time, .radar-live, .radar-attribution { position: absolute; z-index: 2; padding: 2px 5px; border-radius: 5px; background: rgba(4, 13, 12, .8); color: rgba(237, 247, 243, .88); font-size: 8px; }
 .radar-time { top: 4px; left: 4px; }
 .radar-live { top: 4px; right: 4px; }
 .radar-live i { display: inline-block; width: 5px; height: 5px; margin-right: 2px; border-radius: 50%; background: var(--green); box-shadow: 0 0 7px var(--green); animation: radar-pulse 1.9s infinite; }
@@ -192,29 +193,29 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
 .weather-hour { min-width: 0; padding: 5px 2px; text-align: center; border: 1px solid rgba(216, 241, 232, .06); border-radius: 9px; background: rgba(5, 17, 15, .28); }
 .weather-hour.current { border-color: rgba(131, 230, 185, .34); background: rgba(131, 230, 185, .1); }
 .weather-hour strong, .weather-hour span { display: block; }
-.weather-hour strong { color: var(--muted); font-size: 7px; }
+.weather-hour strong { color: var(--muted); font-size: 8px; }
 .weather-hour-icon { margin: 2px 0; font-size: 15px; }
-.weather-hour-temp { font-size: 10px; font-variant-numeric: tabular-nums; }
-.weather-hour-rain { margin-top: 1px; color: var(--blue); font-size: 7px; }
+.weather-hour-temp { font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.weather-hour-rain { margin-top: 1px; color: var(--blue); font-size: 8.5px; }
 .weather-days { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 7px; }
 .weather-day { min-width: 0; padding: 6px 4px; text-align: center; border: 1px solid rgba(216, 241, 232, .075); border-radius: 12px; background: rgba(5, 17, 15, .34); }
 .weather-day strong, .weather-day span { display: block; }
-.weather-day strong { font-size: 10px; text-transform: uppercase; color: var(--muted); }
+.weather-day strong { font-size: 11px; text-transform: uppercase; color: var(--muted); }
 .weather-day-icon { margin: 4px 0; font-size: 21px; }
-.weather-day-temp { font-size: 11px; font-variant-numeric: tabular-nums; }
-.weather-day-rain { margin-top: 3px; color: var(--blue); font-size: 9px; }
+.weather-day-temp { font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.weather-day-rain { margin-top: 3px; color: var(--blue); font-size: 10.5px; }
 
 .todo-form { display: flex; gap: 8px; margin: -2px 0 10px; }
 .todo-form input {
   min-width: 0; flex: 1; padding: 10px 12px; color: var(--text); border-radius: 12px;
-  border: 1px solid var(--border); outline: 0; background: rgba(5, 17, 15, .45);
+  border: 1px solid var(--border); outline: 0; background: rgba(5, 17, 15, .45); font-size: 14px;
 }
 .todo-form input:focus { border-color: rgba(131, 230, 185, .48); box-shadow: 0 0 0 3px rgba(131, 230, 185, .08); }
 .todo-form button { width: 40px; border: 0; border-radius: 12px; background: var(--green); color: #071510; font-size: 22px; cursor: pointer; }
 .todo-item { display: grid; grid-template-columns: 20px minmax(0, 1fr) 24px; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid rgba(219, 240, 232, .07); }
 .todo-item:first-child { border-top: 0; }
 .todo-item input { width: 17px; height: 17px; accent-color: var(--green); }
-.todo-item span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.todo-item span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
 .todo-item.done span { color: var(--muted); text-decoration: line-through; }
 .todo-delete { width: 24px; height: 24px; border: 0; background: none; color: var(--muted); border-radius: 7px; cursor: pointer; font-size: 16px; opacity: .65; }
 .todo-delete:hover { color: var(--red); background: rgba(255, 143, 134, .08); opacity: 1; }
@@ -228,9 +229,9 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
 .dialog-heading { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; margin-bottom: 20px; }
 .dialog-heading h2 { margin-top: 4px; font-size: 26px; }
 .dialog-close { width: 36px; height: 36px; border: 1px solid var(--border); border-radius: 11px; background: rgba(255, 255, 255, .04); cursor: pointer; font-size: 22px; }
-.dialog-help { margin: -7px 0 18px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.dialog-help { margin: -7px 0 18px; color: var(--muted); font-size: 14px; line-height: 1.5; }
 .manage-dialog h3 { margin: 24px 0 10px; color: var(--muted); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; }
-.manage-form label { display: block; margin-bottom: 7px; color: var(--muted); font-size: 12px; }
+.manage-form label { display: block; margin-bottom: 7px; color: var(--muted); font-size: 13px; }
 .input-row { display: flex; gap: 8px; }
 .input-row input {
   min-width: 0; flex: 1; padding: 11px 13px; color: var(--text); border: 1px solid var(--border); border-radius: 12px;
@@ -240,6 +241,14 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
 .input-row button, .primary-button {
   padding: 10px 15px; border: 0; border-radius: 12px; background: var(--green); color: #071510; cursor: pointer; font-weight: 700;
 }
+.manual-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.manual-form .wide { grid-column: 1 / -1; }
+.manual-form label { display: flex; flex-direction: column; gap: 7px; color: var(--muted); font-size: 13px; }
+.manual-form input {
+  width: 100%; min-width: 0; padding: 12px 13px; color: var(--text); border: 1px solid var(--border);
+  border-radius: 12px; outline: 0; background: rgba(5, 17, 15, .55);
+}
+.manual-form input:focus { border-color: rgba(131, 230, 185, .48); box-shadow: 0 0 0 3px rgba(131, 230, 185, .08); }
 .primary-button:disabled, .input-row button:disabled { opacity: .55; cursor: wait; }
 .manage-results, .manage-selected { display: grid; gap: 7px; margin-top: 12px; }
 .manage-result, .manage-selection {
@@ -248,16 +257,16 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
 }
 button.manage-result { cursor: pointer; }
 button.manage-result:hover { border-color: rgba(131, 230, 185, .38); background: rgba(35, 72, 62, .52); }
-.manage-result strong, .manage-selection strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
-.manage-result span, .manage-selection span { color: var(--muted); font-size: 10px; }
+.manage-result strong, .manage-selection strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.manage-result span, .manage-selection span { color: var(--muted); font-size: 11.5px; }
 .manage-copy { min-width: 0; }
 .remove-selection { flex: none; width: 28px; height: 28px; border: 0; border-radius: 8px; background: rgba(255, 143, 134, .08); color: var(--red); cursor: pointer; font-size: 17px; }
-.manage-message { padding: 13px; color: var(--muted); border: 1px dashed var(--border); border-radius: 12px; font-size: 12px; }
+.manage-message { padding: 13px; color: var(--muted); border: 1px dashed var(--border); border-radius: 12px; font-size: 13px; }
 
-.empty { display: grid; place-items: center; min-height: 110px; padding: 18px; border: 1px dashed var(--border); border-radius: 16px; color: var(--muted); text-align: center; font-size: 12px; }
-.page-footer { display: flex; justify-content: space-between; padding: 0 4px; color: rgba(171, 198, 189, .65); font-size: 10px; }
+.empty { display: grid; place-items: center; min-height: 110px; padding: 18px; border: 1px dashed var(--border); border-radius: 16px; color: var(--muted); text-align: center; font-size: 13.5px; }
+.page-footer { display: flex; justify-content: space-between; padding: 0 4px; color: rgba(171, 198, 189, .65); font-size: 11.5px; }
 .page-footer b { color: var(--muted); font-weight: 500; }
-.toast { position: fixed; right: 25px; bottom: 25px; z-index: 5; max-width: 360px; padding: 12px 15px; border-radius: 13px; background: #2b1716; color: #ffd7d3; border: 1px solid rgba(255, 143, 134, .24); box-shadow: var(--shadow); font-size: 12px; opacity: 0; transform: translateY(10px); pointer-events: none; transition: .25s ease; }
+.toast { position: fixed; right: 25px; bottom: 25px; z-index: 5; max-width: 360px; padding: 12px 15px; border-radius: 13px; background: #2b1716; color: #ffd7d3; border: 1px solid rgba(255, 143, 134, .24); box-shadow: var(--shadow); font-size: 13px; opacity: 0; transform: translateY(10px); pointer-events: none; transition: .25s ease; }
 .toast.visible { opacity: 1; transform: translateY(0); }
 .loading-block { opacity: .58; animation: breathe 1.2s ease-in-out infinite alternate; }
 @keyframes breathe { to { opacity: .9; } }
@@ -278,7 +287,7 @@ button.manage-result:hover { border-color: rgba(131, 230, 185, .38); background:
   .panel-heading h2 { font-size: 21px; }
   .metric-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: minmax(0, 1fr); gap: 8px; }
   .metric { min-height: 0; padding: 10px; border-radius: 14px; }
-  .metric-label { font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .metric-label { font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .metric-value { font-size: clamp(22px, 2.1vw, 31px); }
   .sparkline { height: 34px; }
   .panel-footer { margin-top: 8px; }
@@ -291,16 +300,16 @@ button.manage-result:hover { border-color: rgba(131, 230, 185, .38); background:
   .weather-current { gap: 7px; }
   .weather-current-icon { font-size: 36px; }
   .weather-current-temp { font-size: 31px; }
-  .weather-current-copy strong { margin-bottom: 1px; font-size: 11px; }
-  .weather-current-copy span { font-size: 8px; }
+  .weather-current-copy strong { margin-bottom: 1px; font-size: 12px; }
+  .weather-current-copy span { font-size: 9.5px; }
   .radar-map { height: 72px; }
   .weather-hour { padding: 3px 1px; }
   .weather-hour-icon { margin: 1px 0; font-size: 13px; }
   .weather-days { gap: 5px; }
   .weather-day { padding: 3px 2px; }
   .weather-day-icon { margin: 1px 0; font-size: 15px; }
-  .weather-day-temp { font-size: 9px; }
-  .weather-day-rain { margin-top: 1px; font-size: 7px; }
+  .weather-day-temp { font-size: 10.5px; }
+  .weather-day-rain { margin-top: 1px; font-size: 8.5px; }
   .todo-form { margin-bottom: 7px; }
   .todo-item { padding: 7px 0; }
 }
@@ -437,6 +446,18 @@ button.manage-result:hover { border-color: rgba(131, 230, 185, .38); background:
     border-radius: 20px;
     font-size: 19px;
   }
+  .manage-dialog { width: min(1000px, calc(100vw - 70px)); padding: 38px; border-radius: 32px; }
+  .dialog-heading h2 { font-size: 38px; }
+  .dialog-close { width: 54px; height: 54px; border-radius: 16px; font-size: 31px; }
+  .manual-form { gap: 20px; }
+  .manual-form label { gap: 10px; font-size: 18px; }
+  .manual-form input { padding: 18px 20px; border-radius: 17px; font-size: 20px; }
+  .manual-form .primary-button { padding: 17px 22px; border-radius: 17px; font-size: 19px; }
+  .manage-dialog h3 { margin-top: 34px; font-size: 16px; }
+  .manage-selection { padding: 17px 19px; border-radius: 17px; }
+  .manage-result strong, .manage-selection strong { font-size: 20px; }
+  .manage-result span, .manage-selection span { font-size: 16px; }
+  .remove-selection { width: 42px; height: 42px; border-radius: 12px; font-size: 24px; }
 }
 
 @media (max-width: 1099px) {
@@ -454,6 +475,8 @@ button.manage-result:hover { border-color: rgba(131, 230, 185, .38); background:
   .climate-panel { min-height: 650px; }
   .metric-grid { grid-template-columns: 1fr; }
   .metric { min-height: 130px; }
+  .manual-form { grid-template-columns: 1fr; }
+  .manual-form .wide { grid-column: auto; }
   .page-footer { flex-direction: column; gap: 3px; }
 }
 

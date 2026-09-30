@@ -54,6 +54,29 @@ class TodoStore:
             )
             connection.execute(
                 """
+                CREATE TABLE IF NOT EXISTS deadlines (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT NOT NULL,
+                    due TEXT NOT NULL,
+                    kind TEXT NOT NULL DEFAULT 'Deadline',
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT NOT NULL,
+                    start TEXT NOT NULL,
+                    ends_at TEXT,
+                    location TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
                 CREATE TABLE IF NOT EXISTS app_meta (
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL
@@ -307,5 +330,126 @@ class TodoStore:
             cursor = connection.execute(
                 "DELETE FROM climate_metrics WHERE id = ?", (metric_id,)
             )
+        return cursor.rowcount > 0
+
+    @staticmethod
+    def _deadline(row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "id": row["id"],
+            "title": row["title"],
+            "due": row["due"],
+            "kind": row["kind"],
+        }
+
+    def seed_deadlines(self, items: list[dict[str, Any]]) -> None:
+        now = datetime.now(UTC).isoformat()
+
+        def seed(connection: sqlite3.Connection) -> None:
+            for item in items:
+                title = str(item.get("title", "")).strip()
+                due = str(item.get("due", "")).strip()
+                if not title or not due:
+                    continue
+                connection.execute(
+                    "INSERT INTO deadlines (title, due, kind, created_at) VALUES (?, ?, ?, ?)",
+                    (title, due, str(item.get("kind") or "Deadline").strip(), now),
+                )
+
+        self._seed_once("deadlines_seeded_v1", seed)
+
+    def list_deadlines(self) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM deadlines ORDER BY due, created_at"
+            ).fetchall()
+        return [self._deadline(row) for row in rows]
+
+    def add_deadline(
+        self, title: str, due: str, kind: str = "Deadline"
+    ) -> dict[str, Any]:
+        now = datetime.now(UTC).isoformat()
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "INSERT INTO deadlines (title, due, kind, created_at) VALUES (?, ?, ?, ?)",
+                (title.strip(), due, kind.strip() or "Deadline", now),
+            )
+            row = connection.execute(
+                "SELECT * FROM deadlines WHERE id = ?", (cursor.lastrowid,)
+            ).fetchone()
+        return self._deadline(row)
+
+    def delete_deadline(self, deadline_id: int) -> bool:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "DELETE FROM deadlines WHERE id = ?", (deadline_id,)
+            )
+        return cursor.rowcount > 0
+
+    @staticmethod
+    def _event(row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "id": row["id"],
+            "title": row["title"],
+            "start": row["start"],
+            "end": row["ends_at"],
+            "location": row["location"],
+        }
+
+    def seed_events(self, items: list[dict[str, Any]]) -> None:
+        now = datetime.now(UTC).isoformat()
+
+        def seed(connection: sqlite3.Connection) -> None:
+            for item in items:
+                title = str(item.get("title", "")).strip()
+                start = str(item.get("start", "")).strip()
+                if not title or not start:
+                    continue
+                connection.execute(
+                    """
+                    INSERT INTO events (title, start, ends_at, location, created_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        title,
+                        start,
+                        str(item.get("end") or "").strip() or None,
+                        str(item.get("location") or "").strip(),
+                        now,
+                    ),
+                )
+
+        self._seed_once("events_seeded_v1", seed)
+
+    def list_events(self) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM events ORDER BY start, created_at"
+            ).fetchall()
+        return [self._event(row) for row in rows]
+
+    def add_event(
+        self,
+        title: str,
+        start: str,
+        end: str | None = None,
+        location: str = "",
+    ) -> dict[str, Any]:
+        now = datetime.now(UTC).isoformat()
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO events (title, start, ends_at, location, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (title.strip(), start, end, location.strip(), now),
+            )
+            row = connection.execute(
+                "SELECT * FROM events WHERE id = ?", (cursor.lastrowid,)
+            ).fetchone()
+        return self._event(row)
+
+    def delete_event(self, event_id: int) -> bool:
+        with self._connect() as connection:
+            cursor = connection.execute("DELETE FROM events WHERE id = ?", (event_id,))
         return cursor.rowcount > 0
 

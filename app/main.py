@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import json
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -49,6 +50,19 @@ class ClimateMetricCreate(BaseModel):
     tags: dict[str, str] = Field(default_factory=dict)
 
 
+class DeadlineCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=240)
+    due: datetime
+    kind: str = Field(default="Deadline", max_length=80)
+
+
+class EventCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=240)
+    start: datetime
+    end: datetime | None = None
+    location: str = Field(default="", max_length=160)
+
+
 def _metric_defaults(field: str) -> tuple[str, str, int]:
     lowered = field.lower()
     if any(word in lowered for word in ("temperatur", "temperature", "temp")):
@@ -74,6 +88,27 @@ def _timezone(config: dict[str, Any]) -> ZoneInfo:
         return ZoneInfo("UTC")
 
 
+def _seed_items(
+    config: dict[str, Any], section_name: str, default_path: str
+) -> list[dict[str, Any]]:
+    section = config.get(section_name, {})
+    path = resolve_project_path(config, section.get("file", default_path))
+    if not path.exists():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    items = payload.get("items", []) if isinstance(payload, dict) else payload
+    return items if isinstance(items, list) else []
+
+
+def _local_iso(value: datetime, timezone: ZoneInfo) -> str:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone)
+    return value.astimezone(timezone).isoformat()
+
+
 def create_app(config_path: str | Path | None = None) -> FastAPI:
     config = load_config(config_path)
     database_path = resolve_project_path(
@@ -89,6 +124,14 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
         )
         await asyncio.to_thread(
             store.seed_climate_metrics, config.get("climate", {}).get("metrics", [])
+        )
+        await asyncio.to_thread(
+            store.seed_deadlines,
+            _seed_items(config, "deadlines", "data/deadlines.json"),
+        )
+        await asyncio.to_thread(
+            store.seed_events,
+            _seed_items(config, "events", "data/events.json"),
         )
         yield
 
@@ -109,14 +152,26 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
     @application.get("/api/dashboard")
     async def dashboard(response: Response) -> dict[str, Any]:
         timezone = _timezone(config)
-        selected_stocks, selected_metrics, todos = await asyncio.gather(
+        (
+            selected_stocks,
+            selected_metrics,
+            manual_deadlines,
+            manual_events,
+            todos,
+        ) = await asyncio.gather(
             asyncio.to_thread(store.list_stocks),
             asyncio.to_thread(store.list_climate_metrics),
+            asyncio.to_thread(store.list_deadlines),
+            asyncio.to_thread(store.list_events),
             asyncio.to_thread(store.list),
         )
         source_config = copy.deepcopy(config)
         source_config.setdefault("stocks", {})["symbols"] = selected_stocks
         source_config.setdefault("climate", {})["metrics"] = selected_metrics
+        source_config.setdefault("deadlines", {})["items"] = manual_deadlines
+        source_config["deadlines"]["json_feeds"] = []
+        source_config.setdefault("events", {})["items"] = manual_events
+        source_config["events"]["ical"] = []
         climate, deadlines, events, stocks, weather = await asyncio.gather(
             get_climate(source_config),
             get_deadlines(source_config, timezone),
@@ -207,6 +262,64 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
         deleted = await asyncio.to_thread(store.delete_climate_metric, metric_id)
         if not deleted:
             raise HTTPException(status_code=404, detail="Messwert nicht gefunden")
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @application.get("/api/deadlines")
+    async def list_deadlines() -> list[dict[str, Any]]:
+        return await asyncio.to_thread(store.list_deadlines)
+
+    @application.post("/api/deadlines", status_code=status.HTTP_201_CREATED)
+    async def create_deadline(payload: DeadlineCreate) -> dict[str, Any]:
+        title = payload.title.strip()
+        if not title:
+            raise HTTPException(status_code=422, detail="Der Titel darf nicht leer sein")
+        return await asyncio.to_thread(
+            store.add_deadline,
+            title,
+            _local_iso(payload.due, _timezone(config)),
+            payload.kind.strip() or "Deadline",
+        )
+
+    @application.delete(
+        "/api/deadlines/{deadline_id}", status_code=status.HTTP_204_NO_CONTENT
+    )
+    async def delete_deadline(deadline_id: int) -> Response:
+        deleted = await asyncio.to_thread(store.delete_deadline, deadline_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Deadline nicht gefunden")
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    @application.get("/api/events")
+    async def list_events() -> list[dict[str, Any]]:
+        return await asyncio.to_thread(store.list_events)
+
+    @application.post("/api/events", status_code=status.HTTP_201_CREATED)
+    async def create_event(payload: EventCreate) -> dict[str, Any]:
+        title = payload.title.strip()
+        if not title:
+            raise HTTPException(status_code=422, detail="Der Titel darf nicht leer sein")
+        timezone = _timezone(config)
+        start = _local_iso(payload.start, timezone)
+        end = _local_iso(payload.end, timezone) if payload.end else None
+        if end and datetime.fromisoformat(end) < datetime.fromisoformat(start):
+            raise HTTPException(
+                status_code=422, detail="Das Ende darf nicht vor dem Beginn liegen"
+            )
+        return await asyncio.to_thread(
+            store.add_event,
+            title,
+            start,
+            end,
+            payload.location.strip(),
+        )
+
+    @application.delete(
+        "/api/events/{event_id}", status_code=status.HTTP_204_NO_CONTENT
+    )
+    async def delete_event(event_id: int) -> Response:
+        deleted = await asyncio.to_thread(store.delete_event, event_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Termin nicht gefunden")
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     @application.get("/api/influx/fields")

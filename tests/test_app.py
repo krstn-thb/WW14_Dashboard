@@ -126,6 +126,53 @@ def test_climate_metric_selection_lifecycle(tmp_path: Path) -> None:
     assert deleted.status_code == 204
 
 
+def test_manual_deadline_lifecycle(tmp_path: Path) -> None:
+    app = create_app(make_config(tmp_path))
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/deadlines",
+            json={
+                "title": "Journal einreichen",
+                "due": "2099-03-04T23:59:00",
+                "kind": "Journal",
+            },
+        )
+        listed = client.get("/api/deadlines")
+        dashboard = client.get("/api/dashboard")
+        deleted = client.delete(f'/api/deadlines/{created.json()["id"]}')
+
+    assert created.status_code == 201
+    assert created.json()["due"].endswith("+01:00")
+    assert any(item["title"] == "Journal einreichen" for item in listed.json())
+    assert any(
+        item["title"] == "Journal einreichen"
+        for item in dashboard.json()["deadlines"]["items"]
+    )
+    assert deleted.status_code == 204
+
+
+def test_manual_event_lifecycle(tmp_path: Path) -> None:
+    app = create_app(make_config(tmp_path))
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/events",
+            json={
+                "title": "Projektbesprechung",
+                "start": "2099-03-04T10:00:00",
+                "end": "2099-03-04T11:00:00",
+                "location": "WW14",
+            },
+        )
+        listed = client.get("/api/events")
+        deleted = client.delete(f'/api/events/{created.json()["id"]}')
+
+    assert created.status_code == 201
+    assert created.json()["start"].endswith("+01:00")
+    assert created.json()["location"] == "WW14"
+    assert any(item["title"] == "Projektbesprechung" for item in listed.json())
+    assert deleted.status_code == 204
+
+
 def test_weather_includes_todays_timeline_and_radar(monkeypatch) -> None:
     times = [f"2026-09-30T{hour:02d}:00" for hour in range(24)]
     forecast = {

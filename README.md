@@ -10,8 +10,7 @@ Das Projekt ist bewusst schlank aufgebaut: Ein Python-Dienst liefert Daten und O
 - selbstständige Aktualisierung; Standardintervall 60 Sekunden
 - Loxone-/InfluxDB-Messwerte mit 24-Stunden-Verlauf
 - Auswahl vorhandener InfluxDB-Messfelder direkt im Dashboard
-- lokale Deadlines sowie optionale JSON-Feeds
-- lokale Termine sowie optionale iCal-/ICS-Kalender
+- Deadlines und wichtige Termine direkt im Dashboard eintragen und löschen
 - Wetter für Brandenburg an der Havel mit Tagesverlauf und animierter DWD-Regenvorschau für die nächsten zwei Stunden
 - Aktienkurse mit Suche, Hinzufügen und Entfernen im Dashboard
 - persistente To-do-Liste in SQLite
@@ -101,31 +100,15 @@ climate:
 
 ### Deadlines
 
-Direkt in `data/deadlines.json` pflegen. Das Feld `due` ist ein ISO-Datum mit Uhrzeit und Zeitzone:
+Im Feld **Deadlines** auf **+** klicken und Titel, Fälligkeitszeit sowie Art eintragen. Im selben Fenster können vorhandene Einträge wieder gelöscht werden. Die Daten liegen dauerhaft in `data/dashboard.db`.
 
-```json
-{
-  "title": "Paper für Konferenz XYZ",
-  "due": "2027-02-12T23:59:00+01:00",
-  "kind": "Konferenz",
-  "url": "https://example.org/cfp"
-}
-```
-
-Unter `deadlines.json_feeds` können zusätzlich URLs eingetragen werden, die dasselbe JSON-Format liefern.
+Beim ersten Start einer älteren Installation werden vorhandene Einträge aus `data/deadlines.json` einmalig übernommen. Danach wird diese Datei nicht mehr zur laufenden Pflege benötigt.
 
 ### Kalender
 
-Lokale Termine stehen in `data/events.json`. Für einen veröffentlichten iCal-Kalender in `config/dashboard.yaml` ergänzen:
+Im Feld **Wichtige Termine** auf **+** klicken. Titel und Beginn sind erforderlich; Ende und Ort sind optional. Vorhandene Termine lassen sich im selben Fenster löschen und werden dauerhaft in `data/dashboard.db` gespeichert.
 
-```yaml
-events:
-  ical:
-    - name: Hochschulkalender
-      url: "https://example.org/calendar.ics"
-```
-
-Private Kalender-URLs sollten später ebenfalls über Umgebungsvariablen eingebunden werden, damit sie nicht im öffentlichen Repository landen.
+Beim ersten Start einer älteren Installation werden vorhandene Einträge aus `data/events.json` einmalig übernommen.
 
 ### Aktien
 

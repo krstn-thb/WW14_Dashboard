@@ -253,7 +253,16 @@ def _normalise_timed_items(
 
 async def get_deadlines(config: dict[str, Any], timezone: ZoneInfo) -> dict[str, Any]:
     section = config.get("deadlines", {})
-    items = _read_json(resolve_project_path(config, section.get("file", "data/deadlines.json")))
+    configured_items = section.get("items")
+    items = (
+        list(configured_items)
+        if isinstance(configured_items, list)
+        else _read_json(
+            resolve_project_path(
+                config, section.get("file", "data/deadlines.json")
+            )
+        )
+    )
     errors: list[str] = []
 
     async def fetch_feed(url: str) -> list[dict[str, Any]]:
@@ -313,7 +322,14 @@ def _calendar_items(raw: bytes, source_name: str, timezone: ZoneInfo) -> list[di
 
 async def get_events(config: dict[str, Any], timezone: ZoneInfo) -> dict[str, Any]:
     section = config.get("events", {})
-    items = _read_json(resolve_project_path(config, section.get("file", "data/events.json")))
+    configured_items = section.get("items")
+    items = (
+        list(configured_items)
+        if isinstance(configured_items, list)
+        else _read_json(
+            resolve_project_path(config, section.get("file", "data/events.json"))
+        )
+    )
     errors: list[str] = []
 
     async def fetch_calendar(url: str, name: str) -> list[dict[str, Any]]:
