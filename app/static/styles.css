@@ -625,8 +625,18 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
 .dashboard-slide .metric-grid--packed .sparkline { height: clamp(30px, 4vh, 66px); }
 
 .weather-panel-meta, .slide-subtitle { margin-top: 7px; font-size: clamp(14px, .9vw, 24px); }
-.weather-panel .weather-content { justify-content: space-around; gap: clamp(16px, 2vh, 38px); overflow: hidden; }
-.weather-panel .weather-top { min-height: 0; display: block; }
+.weather-panel .weather-content {
+  display: grid;
+  grid-template-rows: minmax(0, 1.65fr) minmax(0, .62fr) minmax(0, .72fr);
+  gap: clamp(12px, 1.35vh, 28px);
+  overflow: hidden;
+}
+.weather-panel .weather-top {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.35fr);
+  gap: clamp(18px, 1.6vw, 42px);
+}
 .weather-panel .weather-current { justify-content: center; gap: clamp(24px, 2.5vw, 70px); }
 .weather-panel .weather-current-icon { font-size: clamp(90px, 10vw, 230px); }
 .weather-panel .weather-current-temp { font-size: clamp(78px, 9vw, 215px); }
@@ -644,6 +654,26 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
 .weather-panel .weather-day-icon { font-size: clamp(31px, 3.2vw, 78px); }
 .weather-panel .weather-day-temp { font-size: clamp(18px, 1.25vw, 33px); }
 .weather-panel .weather-day-rain { font-size: clamp(12px, .8vw, 21px); }
+.weather-radar-preview { min-width: 0; min-height: 0; overflow: hidden; border-radius: clamp(18px, 1.3vw, 34px); }
+.weather-radar-preview .radar-map { width: 100%; height: 100%; border-radius: inherit; }
+.weather-radar-preview .radar-tile-grid {
+  width: 1280px;
+  height: 768px;
+  grid-template-columns: repeat(5, 256px);
+  grid-template-rows: repeat(3, 256px);
+  transform-origin: var(--radar-marker-x) var(--radar-marker-y);
+}
+.weather-radar-preview .radar-frame { width: 1280px; height: 768px; }
+.weather-radar-preview .radar-time,
+.weather-radar-preview .radar-live,
+.weather-radar-preview .radar-attribution {
+  padding: clamp(4px, .38vw, 10px) clamp(7px, .58vw, 15px);
+  border-radius: 8px;
+  font-size: clamp(10px, .64vw, 17px);
+}
+.weather-radar-preview .radar-time { top: 10px; left: 10px; }
+.weather-radar-preview .radar-live { top: 10px; right: 10px; }
+.weather-radar-preview .radar-attribution { right: 10px; bottom: 10px; }
 
 .radar-slide-content { flex: 1; min-height: 0; overflow: hidden; border-radius: clamp(18px, 1.3vw, 34px); }
 .radar-slide-content .radar-map { width: 100%; height: 100%; border-radius: inherit; cursor: default; }
@@ -727,8 +757,10 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
   overflow: auto;
 }
 .stocks-panel .stock-row {
+  position: relative;
+  overflow: hidden;
   min-height: clamp(100px, 15vh, 220px);
-  grid-template-columns: minmax(130px, .9fr) minmax(150px, 1.3fr) minmax(130px, .8fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: clamp(12px, 1vw, 26px);
   padding: clamp(18px, 1.3vw, 34px);
   border: 1px solid rgba(216, 241, 232, .075);
@@ -736,11 +768,25 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
   background: rgba(5, 17, 15, .32);
 }
 .stocks-panel .stock-row:first-child { padding-top: clamp(18px, 1.3vw, 34px); }
+.stocks-panel .stock-name,
+.stocks-panel .stock-price {
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 2px 12px rgba(2, 10, 9, .98), 0 0 24px rgba(2, 10, 9, .9);
+}
 .stocks-panel .stock-name strong { font-size: clamp(19px, 1.25vw, 34px); }
 .stocks-panel .stock-name span { font-size: clamp(11px, .72vw, 19px); }
 .stocks-panel .stock-price { font-size: clamp(20px, 1.35vw, 36px); }
 .stocks-panel .stock-change { font-size: clamp(12px, .78vw, 21px); }
-.stocks-panel .stock-row .sparkline { height: clamp(45px, 6vh, 95px); }
+.stocks-panel .stock-row .sparkline {
+  position: absolute;
+  z-index: 0;
+  inset: 15% 3%;
+  width: 94%;
+  height: 70%;
+  opacity: .42;
+  pointer-events: none;
+}
 
 .planner-panel { overflow: hidden; }
 .planner-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(13px, 1.2vw, 30px); }
@@ -804,12 +850,16 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
   .stocks-panel .stock-row { min-height: 90px; padding: 12px; }
   .planner-column { padding: 12px; }
   .mensa-card { padding: 14px; }
+  .weather-panel .weather-top { gap: 12px; }
   .refresh-meta { display: none; }
 }
 
 @media (max-width: 780px) {
   .brand-logo { display: none; }
   .connection { display: none; }
+  .weather-panel .weather-content { display: flex; overflow: auto; }
+  .weather-panel .weather-top { grid-template-columns: 1fr; }
+  .weather-radar-preview { min-height: 230px; }
   .planner-grid { grid-template-columns: 1fr; overflow: auto; }
   .planner-column { min-height: 300px; }
   .mensa-grid { grid-template-columns: 1fr; overflow: auto; }

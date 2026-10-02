@@ -9,6 +9,8 @@ const state = {
   slideTimer: null,
   slideIntervalMs: 10000,
   slideAutoplay: true,
+  slidePausedByMouse: false,
+  mouseResumeTimer: null,
   toastTimer: null,
   selectedStocks: [],
   selectedClimateMetrics: [],
@@ -248,28 +250,27 @@ function radarMap(radar, location) {
   const firstLabel = radar.stale ? "Radar gespeichert" : "Radar jetzt";
   const liveLabel = radar.stale ? "Letzter Stand" : "2 h Vorschau";
   return `<div class="radar-map radar-map--slide">
-    <div class="radar-tile-grid" style="--radar-marker-x:${markerX.toFixed(1)}px;--radar-marker-y:${markerY.toFixed(1)}px;left:calc(50% - ${markerX.toFixed(1)}px);top:calc(50% - ${markerY.toFixed(1)}px)">${tiles.join("")}<img id="radar-frame" class="radar-frame" src="${escapeHtml(first.url)}" decoding="async" alt="Animierte Niederschlagsvorhersage" /></div>
+    <div class="radar-tile-grid" style="--radar-marker-x:${markerX.toFixed(1)}px;--radar-marker-y:${markerY.toFixed(1)}px;left:calc(50% - ${markerX.toFixed(1)}px);top:calc(50% - ${markerY.toFixed(1)}px)">${tiles.join("")}<img class="radar-frame" src="${escapeHtml(first.url)}" decoding="async" alt="Animierte Niederschlagsvorhersage" /></div>
     <span class="radar-marker" aria-label="${escapeHtml(location)}"></span>
-    <span id="radar-time" class="radar-time">${firstLabel} · ${formatDate(first.time, { hour: "2-digit", minute: "2-digit" })}</span>
+    <span class="radar-time">${firstLabel} · ${formatDate(first.time, { hour: "2-digit", minute: "2-digit" })}</span>
     <span class="radar-live ${radar.stale ? "stale" : ""}"><i></i> ${liveLabel}</span>
     <span class="radar-attribution"><a href="https://www.dwd.de/" target="_blank" rel="noopener">DWD</a> · © OpenStreetMap</span>
   </div>`;
 }
 
 function fitRadarMap() {
-  const map = $("#radar-slide-content .radar-map");
-  const grid = map?.querySelector(".radar-tile-grid");
-  if (!map || !grid) return;
-  const scale = Math.max(map.clientWidth / 1280, map.clientHeight / 768) * 1.03;
-  grid.style.transform = `scale(${scale})`;
+  document.querySelectorAll(".radar-map").forEach((map) => {
+    const grid = map.querySelector(".radar-tile-grid");
+    if (!grid || !map.clientWidth || !map.clientHeight) return;
+    const scale = Math.max(map.clientWidth / 1280, map.clientHeight / 768) * 1.03;
+    grid.style.transform = `scale(${scale})`;
+  });
 }
 
 function startRadarAnimation() {
   window.clearInterval(state.radarTimer);
   state.radarTimer = null;
-  const image = $("#radar-frame");
-  const label = $("#radar-time");
-  if (!image || !label || !state.radarFrames.length) return;
+  if (!state.radarFrames.length) return;
 
   state.radarFrames.slice(1).forEach((frame) => {
     const preload = new Image();
@@ -281,13 +282,18 @@ function startRadarAnimation() {
   let index = 0;
   state.radarTimer = window.setInterval(() => {
     index = (index + 1) % state.radarFrames.length;
-    if (!$(".radar-panel").classList.contains("is-active")) return;
+    const activeSlide = $(".dashboard-slide.is-active");
+    const images = activeSlide?.querySelectorAll(".radar-frame") || [];
+    const labels = activeSlide?.querySelectorAll(".radar-time") || [];
+    if (!images.length || !labels.length) return;
     const frame = state.radarFrames[index];
-    image.src = frame.url;
     const offset = frame.stale
       ? "Letzter Stand"
       : Number(frame.minutes_ahead) > 0 ? `Radar +${frame.minutes_ahead} min` : "Radar jetzt";
-    label.textContent = `${offset} · ${formatDate(frame.time, { hour: "2-digit", minute: "2-digit" })}`;
+    images.forEach((image) => { image.src = frame.url; });
+    labels.forEach((label) => {
+      label.textContent = `${offset} · ${formatDate(frame.time, { hour: "2-digit", minute: "2-digit" })}`;
+    });
   }, 1400);
 }
 
@@ -329,6 +335,9 @@ function renderWeather(weather) {
               <span>Gefühlt ${formatNumber(current.apparent_temperature, 1)} °C · Wind ${formatNumber(current.wind_speed, 0)} km/h</span>
             </div>
           </div>
+        </div>
+        <div class="weather-radar-preview" aria-label="Regenradar für ${escapeHtml(weatherLocation)}">
+          ${radarMap(weather.radar, weatherLocation)}
         </div>
       </div>
       <div class="weather-hourly" aria-label="Wetterverlauf heute">
@@ -421,7 +430,7 @@ function dashboardSlides() {
 function scheduleSlideChange() {
   window.clearTimeout(state.slideTimer);
   state.slideTimer = null;
-  if (!state.slideAutoplay) return;
+  if (!state.slideAutoplay || state.slidePausedByMouse) return;
   state.slideTimer = window.setTimeout(() => {
     if (document.querySelector("dialog[open]")) {
       scheduleSlideChange();
@@ -445,13 +454,16 @@ function showSlide(index) {
     dot.classList.toggle("is-active", active);
     dot.setAttribute("aria-selected", String(active));
   });
-  if (slides[state.slideIndex].classList.contains("radar-panel")) {
+  if (slides[state.slideIndex].querySelector(".radar-map")) {
     window.requestAnimationFrame(fitRadarMap);
   }
   scheduleSlideChange();
 }
 
 function setSlideAutoplay(enabled, reason = "") {
+  window.clearTimeout(state.mouseResumeTimer);
+  state.mouseResumeTimer = null;
+  state.slidePausedByMouse = false;
   state.slideAutoplay = enabled;
   const button = $("#slide-autoplay");
   button.textContent = enabled ? "Ⅱ" : "▶";
@@ -478,7 +490,6 @@ async function loadDashboard() {
     state.refreshSeconds = Math.max(15, Number(data.settings.refresh_seconds) || 60);
     document.title = data.settings.title;
     $("#dashboard-title").textContent = data.settings.title;
-    $("#dashboard-subtitle").textContent = data.settings.subtitle;
     $("#refresh-interval").textContent = `alle ${state.refreshSeconds} s`;
     renderClimate(data.climate);
     renderDeadlines(data.deadlines);
@@ -898,7 +909,17 @@ document.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("mousemove", () => {
-  if (state.slideAutoplay) setSlideAutoplay(false, "Maus erkannt · pausiert");
+  if (!state.slideAutoplay) return;
+  state.slidePausedByMouse = true;
+  window.clearTimeout(state.slideTimer);
+  state.slideTimer = null;
+  window.clearTimeout(state.mouseResumeTimer);
+  $("#slide-status").textContent = "Maus bewegt · pausiert";
+  state.mouseResumeTimer = window.setTimeout(() => {
+    state.slidePausedByMouse = false;
+    $("#slide-status").textContent = "Automatik · 10 s";
+    scheduleSlideChange();
+  }, 3000);
 }, { passive: true });
 window.addEventListener("resize", () => window.requestAnimationFrame(fitRadarMap));
 

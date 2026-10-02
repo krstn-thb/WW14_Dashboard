@@ -1,6 +1,5 @@
 dashboard:
   title: "WW14 Dashboard"
-  subtitle: "Lehre · Forschung · Raumklima"
   timezone: "Europe/Berlin"
   locale: "de-DE"
   refresh_seconds: 60
