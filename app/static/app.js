@@ -107,6 +107,8 @@ function sourceState(element, status) {
   element.className = `source-state ${status || ""}`;
   element.textContent = status === "live"
     ? "Live"
+    : status === "stale"
+      ? "Gespeichert"
     : status === "error"
       ? "Störung"
       : status === "disabled"
@@ -167,13 +169,46 @@ function renderEvents(section) {
   $("#event-count").textContent = items.length;
   const target = $("#event-content");
   target.innerHTML = items.length
-    ? items.slice(0, 7).map((item) => `<div class="event-item">
-      <div class="date-tile"><strong>${formatDate(item.start, { day: "2-digit" })}</strong><span>${formatDate(item.start, { month: "short" })}</span></div>
-      <div class="item-main"><strong title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</strong><div class="item-meta"><span>${formatDate(item.start, { weekday: "short", hour: "2-digit", minute: "2-digit" })}</span>${item.location ? `<span>·</span><span>${escapeHtml(item.location)}</span>` : ""}</div></div>
-    </div>`).join("")
+    ? items.slice(0, 7).map((item) => {
+      const [urgency, urgencyClass] = urgencyLabel(Number(item.days_remaining));
+      return `<div class="event-item ${urgencyClass}">
+        <div class="date-tile"><strong>${formatDate(item.start, { day: "2-digit" })}</strong><span>${formatDate(item.start, { month: "short" })}</span></div>
+        <div class="item-main"><strong title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</strong><div class="item-meta"><span>${formatDate(item.start, { weekday: "short", hour: "2-digit", minute: "2-digit" })}</span>${item.location ? `<span>·</span><span>${escapeHtml(item.location)}</span>` : ""}${item.recurrence && item.recurrence !== "none" ? `<span>·</span><span>↻ ${escapeHtml(recurrenceLabel(item.recurrence))}</span>` : ""}</div></div>
+        <span class="urgency ${urgencyClass}">${urgency}</span>
+      </div>`;
+    }).join("")
     : '<div class="empty">Keine bevorstehenden Termine</div>';
   target.classList.remove("loading-block");
   if (section.errors?.length) showToast(section.errors[0]);
+}
+
+function renderDepartureList(selector, items) {
+  const target = $(selector);
+  target.innerHTML = items.length
+    ? items.map((item) => {
+      const delay = Number(item.delay_minutes);
+      const delayed = Number.isFinite(delay) && delay > 0;
+      const platformChanged = item.platform && item.planned_platform && String(item.platform) !== String(item.planned_platform);
+      const status = item.cancelled ? "Fällt aus" : delayed ? `+${delay} min` : delay === 0 ? "Pünktlich" : "Plan";
+      return `<div class="departure-row ${item.cancelled ? "cancelled" : delayed ? "delayed" : "on-time"}">
+        <div class="departure-time"><strong>${formatDate(item.realtime || item.planned, { hour: "2-digit", minute: "2-digit" })}</strong>${delayed ? `<span>${formatDate(item.planned, { hour: "2-digit", minute: "2-digit" })}</span>` : ""}</div>
+        <span class="departure-line">${escapeHtml(item.line || "RE1")}</span>
+        <div class="departure-destination"><strong>${escapeHtml(item.destination || "–")}</strong><span>${item.platform ? `Gleis ${escapeHtml(item.platform)}` : "Gleis –"}${platformChanged ? ` · geplant ${escapeHtml(item.planned_platform)}` : ""}</span></div>
+        <span class="departure-delay">${status}</span>
+      </div>`;
+    }).join("")
+    : '<div class="empty">Keine passende RE1-Abfahrt gefunden</div>';
+  target.classList.remove("loading-block");
+}
+
+function renderDepartures(departures) {
+  sourceState($("#departure-state"), departures.status);
+  $("#departure-updated").textContent = departures.updated_at
+    ? `${escapeHtml(departures.station || "Brandenburg Hbf")} · Stand ${formatDate(departures.updated_at, { hour: "2-digit", minute: "2-digit" })}`
+    : escapeHtml(departures.station || "Brandenburg Hbf");
+  $("#departure-message").textContent = departures.message || "Echtzeit inklusive Verspätungen und Ausfällen";
+  renderDepartureList("#departures-magdeburg", departures.directions?.magdeburg || []);
+  renderDepartureList("#departures-berlin", departures.directions?.berlin || []);
 }
 
 function renderStocks(stocks) {
@@ -467,6 +502,8 @@ function scheduleSlideChange() {
 function showSlide(index) {
   const slides = dashboardSlides();
   if (!slides.length) return;
+  const movingBackward = index < state.slideIndex;
+  $(".slide-deck").classList.toggle("is-backward", movingBackward);
   state.slideIndex = (index + slides.length) % slides.length;
   slides.forEach((slide, slideIndex) => {
     const active = slideIndex === state.slideIndex;
@@ -518,6 +555,7 @@ async function loadDashboard() {
     renderClimate(data.climate);
     renderDeadlines(data.deadlines);
     renderEvents(data.events);
+    renderDepartures(data.departures || { status: "disabled", directions: {} });
     renderStocks(data.stocks);
     renderWeather(data.weather || { status: "disabled", daily: [] });
     renderMensa(data.mensa || { status: "disabled", items: [] });
@@ -577,6 +615,15 @@ function manualDateLabel(value) {
   });
 }
 
+function recurrenceLabel(recurrence) {
+  return {
+    daily: "täglich",
+    weekly: "wöchentlich",
+    monthly: "monatlich",
+    yearly: "jährlich",
+  }[recurrence] || "einmalig";
+}
+
 function renderDeadlineSelections(items) {
   state.selectedDeadlines = items;
   const target = $("#deadline-selected");
@@ -597,7 +644,7 @@ function renderEventSelections(items) {
   const target = $("#event-selected");
   target.innerHTML = items.length
     ? items.map((item) => `<div class="manage-selection">
-      <div class="manage-copy"><strong>${escapeHtml(item.title)}</strong><span>${manualDateLabel(item.start)}${item.location ? ` · ${escapeHtml(item.location)}` : ""}</span></div>
+      <div class="manage-copy"><strong>${escapeHtml(item.title)}</strong><span>${manualDateLabel(item.start)}${item.location ? ` · ${escapeHtml(item.location)}` : ""}${item.recurrence && item.recurrence !== "none" ? ` · ↻ ${escapeHtml(recurrenceLabel(item.recurrence))}${item.recurrence_until ? ` bis ${formatDate(`${item.recurrence_until}T12:00:00`, { day: "2-digit", month: "short", year: "numeric" })}` : ""}` : ""}</span></div>
       <button class="remove-selection" type="button" data-remove-event="${Number(item.id)}" aria-label="${escapeHtml(item.title)} entfernen">×</button>
     </div>`).join("")
     : '<div class="manage-message">Noch kein Termin eingetragen.</div>';
@@ -863,6 +910,12 @@ $("#event-manage-button").addEventListener("click", async () => {
   }
 });
 
+$("#event-recurrence").addEventListener("change", (event) => {
+  const until = $("#event-recurrence-until");
+  until.disabled = event.currentTarget.value === "none";
+  if (until.disabled) until.value = "";
+});
+
 $("#event-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const button = event.currentTarget.querySelector('button[type="submit"]');
@@ -876,9 +929,12 @@ $("#event-form").addEventListener("submit", async (event) => {
         start: $("#event-start").value,
         end: end || null,
         location: $("#event-location").value.trim(),
+        recurrence: $("#event-recurrence").value,
+        recurrence_until: $("#event-recurrence-until").value || null,
       }),
     });
     event.currentTarget.reset();
+    $("#event-recurrence-until").disabled = true;
     await refreshEventSelections();
     await loadDashboard();
     $("#event-title").focus();

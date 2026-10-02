@@ -4,7 +4,7 @@ import asyncio
 import copy
 import json
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -18,6 +18,7 @@ from app.sources import (
     discover_influx_fields,
     get_climate,
     get_deadlines,
+    get_departures,
     get_events,
     get_mensa,
     get_stocks,
@@ -64,6 +65,8 @@ class EventCreate(BaseModel):
     start: datetime
     end: datetime | None = None
     location: str = Field(default="", max_length=160)
+    recurrence: str = Field(default="none", max_length=16)
+    recurrence_until: date | None = None
 
 
 class WeatherLocationUpdate(BaseModel):
@@ -222,10 +225,11 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
                     "timezone": weather_location["timezone"],
                 }
             )
-        climate, deadlines, events, stocks, weather, mensa = await asyncio.gather(
+        climate, deadlines, events, departures, stocks, weather, mensa = await asyncio.gather(
             get_climate(source_config),
             get_deadlines(source_config, timezone),
             get_events(source_config, timezone),
+            get_departures(source_config),
             get_stocks(source_config),
             get_weather(source_config),
             get_mensa(source_config),
@@ -244,6 +248,7 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
             "climate": climate,
             "deadlines": deadlines,
             "events": events,
+            "departures": departures,
             "stocks": stocks,
             "weather": weather,
             "mensa": mensa,
@@ -392,12 +397,22 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
             raise HTTPException(
                 status_code=422, detail="Das Ende darf nicht vor dem Beginn liegen"
             )
+        recurrence = payload.recurrence.strip().lower()
+        if recurrence not in {"none", "daily", "weekly", "monthly", "yearly"}:
+            raise HTTPException(status_code=422, detail="Ungültige Wiederholung")
+        if payload.recurrence_until and payload.recurrence_until < datetime.fromisoformat(start).date():
+            raise HTTPException(
+                status_code=422,
+                detail="Das Wiederholungsende darf nicht vor dem Beginn liegen",
+            )
         return await asyncio.to_thread(
             store.add_event,
             title,
             start,
             end,
             payload.location.strip(),
+            recurrence,
+            payload.recurrence_until.isoformat() if payload.recurrence_until else None,
         )
 
     @application.delete(

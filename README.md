@@ -1,6 +1,6 @@
 # WW14 Dashboard
 
-Vollbild-Dashboard für einen Raspberry Pi 5. Es bündelt Loxone-Klimadaten aus InfluxDB, Journal- und Konferenz-Deadlines, wichtige Kalendertermine, Aktien- und Kryptokurse, den Mensa-Speiseplan und eine gemeinsame To-do-Liste.
+Vollbild-Dashboard für einen Raspberry Pi 5. Es bündelt Loxone-Klimadaten aus InfluxDB, Journal- und Konferenz-Deadlines, wichtige Kalendertermine, RE1-Echtzeitabfahrten, Aktien- und Kryptokurse, den Mensa-Speiseplan und eine gemeinsame To-do-Liste.
 
 Das Projekt ist bewusst schlank aufgebaut: Ein Python-Dienst liefert Daten und Oberfläche, Chromium zeigt sie im Vollbildmodus. Auf dem Raspberry Pi ist kein KI-Agent notwendig.
 
@@ -11,7 +11,8 @@ Das Projekt ist bewusst schlank aufgebaut: Ein Python-Dienst liefert Daten und O
 - selbstständige Aktualisierung; Standardintervall 60 Sekunden
 - Loxone-/InfluxDB-Messwerte mit 24-Stunden-Verlauf
 - Auswahl vorhandener InfluxDB-Messfelder direkt im Dashboard
-- Deadlines und wichtige Termine direkt im Dashboard eintragen und löschen
+- Deadlines und einmalige oder wiederkehrende Termine direkt im Dashboard eintragen und löschen
+- RE1-Abfahrten ab Brandenburg Hbf Richtung Magdeburg und Berlin inklusive Verspätungen, Ausfällen und Gleisen
 - frei wählbarer Wetterort mit Tagesverlauf und animierter DWD-Regenvorschau für die nächsten zwei Stunden
 - Aktien- und Kryptokurse mit Suche, Hinzufügen und Entfernen; alle Preise werden in Euro angezeigt
 - werktäglich automatisch geladener Speiseplan der Mensa Brandenburg an der Havel
@@ -118,9 +119,15 @@ Beim ersten Start einer älteren Installation werden vorhandene Einträge aus `d
 
 ### Kalender
 
-Im Feld **Wichtige Termine** auf **+** klicken. Titel und Beginn sind erforderlich; Ende und Ort sind optional. Vorhandene Termine lassen sich im selben Fenster löschen und werden dauerhaft in `data/dashboard.db` gespeichert.
+Im Feld **Wichtige Termine** auf **+** klicken. Titel und Beginn sind erforderlich; Ende und Ort sind optional. Termine können einmalig, täglich, wöchentlich, monatlich oder jährlich angelegt und optional zeitlich begrenzt werden. Vorhandene Terminserien lassen sich im selben Fenster vollständig löschen und werden dauerhaft in `data/dashboard.db` gespeichert. Wie bei Deadlines werden Termine ab 14 Tagen gelb und ab sieben Tagen rot hervorgehoben.
 
 Beim ersten Start einer älteren Installation werden vorhandene Einträge aus `data/events.json` einmalig übernommen.
+
+### RE1-Abfahrtsmonitor
+
+Die Slide **RE1 Abfahrten** zeigt die nächsten Züge ab Brandenburg Hbf getrennt nach Richtung Magdeburg und Richtung Berlin. Angezeigt werden Echtzeit, Verspätung, Ausfall und Gleis. Die Daten kommen ohne API-Schlüssel aus der stabilen JSON-Schnittstelle der [DBF-Abfahrtstafel](https://dbf.finalrewind.org/Brandenburg%20Hbf). Bei einem kurzen Ausfall bleibt der letzte erfolgreiche Stand bis zu 30 Minuten sichtbar.
+
+Quelle, Bahnhof und Anzahl lassen sich unter `departures` in `config/dashboard.yaml` anpassen. Für die normale Installation ist keine zusätzliche Einrichtung nötig. Der Raspberry Pi benötigt ausgehenden HTTPS-Zugriff auf `dbf.finalrewind.org`. Der Dienst wird höchstens einmal pro Minute abgefragt.
 
 ### Aktien und Kryptowährungen
 
@@ -166,6 +173,7 @@ FastAPI-Dashboard ─── SQLite (To-do und lokale Auswahl)
         ├──────────── InfluxDB (Loxone)
         ├──────────── SQLite (Deadlines, Termine und To-dos)
         ├──────────── Open-Meteo (Wetter)
+        ├──────────── DBF/HAFAS (RE1-Echtzeitabfahrten)
         ├──────────── Marktdatenanbieter (Aktien, Krypto und EUR-Wechselkurse)
         └──────────── iMensa (Mensa-Speiseplan)
 ```

@@ -80,10 +80,24 @@ class TodoStore:
                     start TEXT NOT NULL,
                     ends_at TEXT,
                     location TEXT NOT NULL DEFAULT '',
+                    recurrence TEXT NOT NULL DEFAULT 'none',
+                    recurrence_until TEXT,
                     created_at TEXT NOT NULL
                 )
                 """
             )
+            event_columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(events)").fetchall()
+            }
+            if "recurrence" not in event_columns:
+                connection.execute(
+                    "ALTER TABLE events ADD COLUMN recurrence TEXT NOT NULL DEFAULT 'none'"
+                )
+            if "recurrence_until" not in event_columns:
+                connection.execute(
+                    "ALTER TABLE events ADD COLUMN recurrence_until TEXT"
+                )
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS app_meta (
@@ -444,6 +458,8 @@ class TodoStore:
             "start": row["start"],
             "end": row["ends_at"],
             "location": row["location"],
+            "recurrence": row["recurrence"],
+            "recurrence_until": row["recurrence_until"],
         }
 
     def seed_events(self, items: list[dict[str, Any]]) -> None:
@@ -457,14 +473,17 @@ class TodoStore:
                     continue
                 connection.execute(
                     """
-                    INSERT INTO events (title, start, ends_at, location, created_at)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO events
+                        (title, start, ends_at, location, recurrence, recurrence_until, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         title,
                         start,
                         str(item.get("end") or "").strip() or None,
                         str(item.get("location") or "").strip(),
+                        str(item.get("recurrence") or "none").strip(),
+                        str(item.get("recurrence_until") or "").strip() or None,
                         now,
                     ),
                 )
@@ -484,15 +503,26 @@ class TodoStore:
         start: str,
         end: str | None = None,
         location: str = "",
+        recurrence: str = "none",
+        recurrence_until: str | None = None,
     ) -> dict[str, Any]:
         now = datetime.now(UTC).isoformat()
         with self._connect() as connection:
             cursor = connection.execute(
                 """
-                INSERT INTO events (title, start, ends_at, location, created_at)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO events
+                    (title, start, ends_at, location, recurrence, recurrence_until, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (title.strip(), start, end, location.strip(), now),
+                (
+                    title.strip(),
+                    start,
+                    end,
+                    location.strip(),
+                    recurrence,
+                    recurrence_until,
+                    now,
+                ),
             )
             row = connection.execute(
                 "SELECT * FROM events WHERE id = ?", (cursor.lastrowid,)

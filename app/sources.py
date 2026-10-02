@@ -5,6 +5,7 @@ import json
 import math
 import re
 import time
+from calendar import monthrange
 from datetime import UTC, date, datetime, time as datetime_time, timedelta
 from html.parser import HTMLParser
 from pathlib import Path
@@ -306,6 +307,62 @@ def _normalise_timed_items(
     return sorted(normalised, key=lambda entry: entry[date_key])
 
 
+def _recurring_occurrence(start: datetime, recurrence: str, index: int) -> datetime:
+    if recurrence == "daily":
+        return start + timedelta(days=index)
+    if recurrence == "weekly":
+        return start + timedelta(weeks=index)
+    if recurrence == "monthly":
+        month_index = start.month - 1 + index
+        year = start.year + month_index // 12
+        month = month_index % 12 + 1
+        return start.replace(
+            year=year, month=month, day=min(start.day, monthrange(year, month)[1])
+        )
+    if recurrence == "yearly":
+        year = start.year + index
+        return start.replace(
+            year=year, day=min(start.day, monthrange(year, start.month)[1])
+        )
+    return start
+
+
+def _expand_recurring_events(
+    items: list[dict[str, Any]], timezone: ZoneInfo, horizon: datetime
+) -> list[dict[str, Any]]:
+    earliest = datetime.now(timezone) - timedelta(hours=12)
+    expanded: list[dict[str, Any]] = []
+    supported = {"daily", "weekly", "monthly", "yearly"}
+    for item in items:
+        recurrence = str(item.get("recurrence") or "none").lower()
+        if recurrence not in supported:
+            expanded.append(item)
+            continue
+        start = _parse_datetime(item.get("start"), timezone)
+        end = _parse_datetime(item.get("end"), timezone)
+        if not start:
+            continue
+        duration = end - start if end else None
+        until_value = str(item.get("recurrence_until") or "").strip()
+        try:
+            recurrence_until = date.fromisoformat(until_value) if until_value else None
+        except ValueError:
+            recurrence_until = None
+        for index in range(5000):
+            occurrence = _recurring_occurrence(start, recurrence, index)
+            if occurrence > horizon:
+                break
+            if recurrence_until and occurrence.date() > recurrence_until:
+                break
+            if occurrence >= earliest:
+                entry = {**item, "start": occurrence.isoformat()}
+                if duration is not None:
+                    entry["end"] = (occurrence + duration).isoformat()
+                entry["recurrence_instance"] = index
+                expanded.append(entry)
+    return expanded
+
+
 async def get_deadlines(config: dict[str, Any], timezone: ZoneInfo) -> dict[str, Any]:
     section = config.get("deadlines", {})
     configured_items = section.get("items")
@@ -410,6 +467,7 @@ async def get_events(config: dict[str, Any], timezone: ZoneInfo) -> dict[str, An
 
     now = datetime.now(timezone)
     horizon = now + timedelta(days=int(section.get("horizon_days", 60)))
+    items = _expand_recurring_events(items, timezone, horizon)
     result = [
         item
         for item in _normalise_timed_items(items, "start", timezone)
@@ -417,6 +475,156 @@ async def get_events(config: dict[str, Any], timezone: ZoneInfo) -> dict[str, An
         and datetime.fromisoformat(item["start"]) <= horizon
     ]
     return {"items": result, "errors": errors}
+
+
+def _re1_direction(departure: dict[str, Any]) -> str | None:
+    direction = str(
+        departure.get("direction") or departure.get("destination") or ""
+    ).lower()
+    eastbound = (
+        "berlin",
+        "frankfurt (oder)",
+        "eisenhüttenstadt",
+        "cottbus",
+        "fürstenwalde",
+        "erkner",
+    )
+    if "magdeburg" in direction:
+        return "magdeburg"
+    if any(name in direction for name in eastbound):
+        return "berlin"
+
+    stop_names: list[str] = []
+    for stopover in departure.get("stopovers") or departure.get("route") or []:
+        if not isinstance(stopover, dict):
+            continue
+        stop = stopover.get("stop") if isinstance(stopover.get("stop"), dict) else stopover
+        stop_names.append(str(stop.get("name") or "").lower())
+    for index, name in enumerate(stop_names):
+        if "brandenburg hbf" in name or "brandenburg, hbf" in name:
+            stop_names = stop_names[index + 1 :]
+            break
+    route = " ".join(stop_names)
+    if "magdeburg" in route:
+        return "magdeburg"
+    if any(name in route for name in eastbound):
+        return "berlin"
+    return None
+
+
+def _departure_clock(value: Any, timezone: ZoneInfo) -> datetime | None:
+    if not isinstance(value, str) or not re.fullmatch(r"\d{2}:\d{2}", value):
+        return None
+    hour, minute = (int(part) for part in value.split(":"))
+    now = datetime.now(timezone)
+    departure = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if departure < now - timedelta(hours=2):
+        departure += timedelta(days=1)
+    return departure
+
+
+def _normalise_departure(
+    departure: dict[str, Any], timezone: ZoneInfo
+) -> dict[str, Any]:
+    planned_dt = _departure_clock(departure.get("scheduledDeparture"), timezone)
+    delay_value = departure.get("delayDeparture")
+    delay_minutes = (
+        max(0, int(delay_value)) if isinstance(delay_value, (int, float)) else None
+    )
+    actual_dt = (
+        planned_dt + timedelta(minutes=delay_minutes or 0) if planned_dt else None
+    )
+    train = str(departure.get("train") or "RE1")
+    line_match = re.search(r"\bRE\s*1\b", train, flags=re.IGNORECASE)
+    return {
+        "line": line_match.group(0).replace(" ", "").upper() if line_match else "RE1",
+        "destination": str(departure.get("destination") or ""),
+        "planned": planned_dt.isoformat() if planned_dt else None,
+        "realtime": actual_dt.isoformat() if actual_dt else None,
+        "delay_minutes": delay_minutes,
+        "platform": departure.get("platform"),
+        "planned_platform": departure.get("scheduledPlatform"),
+        "cancelled": bool(departure.get("isCancelled")),
+    }
+
+
+async def get_departures(config: dict[str, Any]) -> dict[str, Any]:
+    section = config.get("departures", {})
+    if not section.get("enabled", False):
+        return {
+            "status": "disabled",
+            "station": str(section.get("station", "Brandenburg Hbf")),
+            "directions": {"magdeburg": [], "berlin": []},
+            "message": "Abfahrtsmonitor ist deaktiviert",
+        }
+
+    base_url = str(section.get("base_url", "https://dbf.finalrewind.org")).rstrip("/")
+    station_name = str(section.get("station", "Brandenburg Hbf"))
+    max_results = max(1, min(8, int(section.get("results_per_direction", 5))))
+    try:
+        timezone = ZoneInfo(
+            str(config.get("dashboard", {}).get("timezone", "Europe/Berlin"))
+        )
+    except Exception:
+        timezone = ZoneInfo("Europe/Berlin")
+
+    async def load() -> dict[str, Any]:
+        headers = {"User-Agent": "WW14-Dashboard/1.0"}
+        async with httpx.AsyncClient(timeout=14, follow_redirects=True) as client:
+            departure_response = await client.get(
+                f"{base_url}/{quote(station_name, safe='')}.json",
+                params={
+                    "version": 3,
+                    "limit": max(50, max_results * 10),
+                },
+                headers=headers,
+            )
+            departure_response.raise_for_status()
+            payload = departure_response.json()
+
+        if isinstance(payload, dict) and payload.get("errstr"):
+            raise RuntimeError(str(payload["errstr"]))
+        departures = payload.get("departures", []) if isinstance(payload, dict) else []
+        directions: dict[str, list[dict[str, Any]]] = {"magdeburg": [], "berlin": []}
+        for departure in departures:
+            if not isinstance(departure, dict):
+                continue
+            if not departure.get("scheduledDeparture"):
+                continue
+            line_name = str(departure.get("train") or "")
+            if not re.search(r"\bRE\s*1\b", line_name, flags=re.IGNORECASE):
+                continue
+            direction = _re1_direction(departure)
+            if direction and len(directions[direction]) < max_results:
+                directions[direction].append(_normalise_departure(departure, timezone))
+
+        return {
+            "station": station_name,
+            "directions": directions,
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+
+    try:
+        data, stale = await _cache.get_or_load_with_stale(
+            f"departures:{base_url}:{station_name}",
+            int(section.get("cache_seconds", 60)),
+            int(section.get("stale_seconds", 1800)),
+            int(section.get("retry_seconds", 90)),
+            load,
+        )
+        return {
+            **data,
+            "status": "stale" if stale else "live",
+            "stale": stale,
+            "message": "Letzter erfolgreicher Stand" if stale else "",
+        }
+    except Exception as exc:
+        return {
+            "status": "error",
+            "station": station_name,
+            "directions": {"magdeburg": [], "berlin": []},
+            "message": f"Bahn-Echtzeitdaten nicht erreichbar: {exc}",
+        }
 
 
 async def _fetch_yahoo_stock(symbol: str) -> dict[str, Any]:

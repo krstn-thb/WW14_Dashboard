@@ -60,6 +60,15 @@ events:
   file: "data/events.json"
   horizon_days: 90
 
+departures:
+  enabled: true
+  base_url: "https://dbf.finalrewind.org"
+  station: "Brandenburg Hbf"
+  results_per_direction: 5
+  cache_seconds: 60
+  retry_seconds: 90
+  stale_seconds: 1800
+
 stocks:
   enabled: true
   provider: yahoo

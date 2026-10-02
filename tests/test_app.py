@@ -4,15 +4,18 @@ import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.sources import (
     AsyncTTLCache,
+    _expand_recurring_events,
     _parse_mensa_menu,
     _quote_in_euro,
     _weather_description,
+    get_departures,
     get_stocks,
     get_weather,
 )
@@ -289,6 +292,8 @@ def test_manual_event_lifecycle(tmp_path: Path) -> None:
                 "start": "2099-03-04T10:00:00",
                 "end": "2099-03-04T11:00:00",
                 "location": "WW14",
+                "recurrence": "weekly",
+                "recurrence_until": "2099-06-30",
             },
         )
         listed = client.get("/api/events")
@@ -297,8 +302,99 @@ def test_manual_event_lifecycle(tmp_path: Path) -> None:
     assert created.status_code == 201
     assert created.json()["start"].endswith("+01:00")
     assert created.json()["location"] == "WW14"
+    assert created.json()["recurrence"] == "weekly"
+    assert created.json()["recurrence_until"] == "2099-06-30"
     assert any(item["title"] == "Projektbesprechung" for item in listed.json())
     assert deleted.status_code == 204
+
+
+def test_recurring_events_expand_with_preserved_duration() -> None:
+    timezone = ZoneInfo("Europe/Berlin")
+    start = datetime.now(timezone).replace(hour=10, minute=0, second=0, microsecond=0) + timedelta(days=1)
+    end = start + timedelta(hours=1)
+    horizon = start + timedelta(days=15)
+    items = [
+        {
+            "id": 1,
+            "title": "Wochenrunde",
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "recurrence": "weekly",
+            "recurrence_until": horizon.date().isoformat(),
+        }
+    ]
+
+    expanded = _expand_recurring_events(items, timezone, horizon)
+
+    assert len(expanded) == 3
+    assert all(item["recurrence"] == "weekly" for item in expanded)
+    assert all(
+        datetime.fromisoformat(item["end"]) - datetime.fromisoformat(item["start"])
+        == timedelta(hours=1)
+        for item in expanded
+    )
+
+
+def test_re1_departures_are_split_by_direction(monkeypatch) -> None:
+    class FakeResponse:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self.payload
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            return None
+
+        async def get(self, url, **_):
+            return FakeResponse(
+                {
+                    "departures": [
+                        {
+                            "train": "OE RE1",
+                            "destination": "Magdeburg Hbf",
+                            "scheduledDeparture": "16:00",
+                            "delayDeparture": 5,
+                            "platform": "1",
+                            "scheduledPlatform": "1",
+                        },
+                        {
+                            "train": "OE RE 1",
+                            "destination": "Frankfurt (Oder)",
+                            "scheduledDeparture": "16:10",
+                            "delayDeparture": 0,
+                            "platform": "2",
+                            "scheduledPlatform": "2",
+                        },
+                        {"train": "OE RB51", "destination": "Rathenow", "scheduledDeparture": "16:20"},
+                    ]
+                }
+            )
+
+    monkeypatch.setattr("app.sources.httpx.AsyncClient", lambda **_: FakeClient())
+    result = asyncio.run(
+        get_departures(
+            {
+                "departures": {
+                    "enabled": True,
+                    "base_url": "https://test-vbb.invalid",
+                    "station": "Brandenburg Hbf",
+                    "cache_seconds": 1,
+                }
+            }
+        )
+    )
+
+    assert result["status"] == "live"
+    assert result["directions"]["magdeburg"][0]["delay_minutes"] == 5
+    assert result["directions"]["berlin"][0]["delay_minutes"] == 0
 
 
 def test_weather_includes_todays_timeline_and_radar(monkeypatch) -> None:
