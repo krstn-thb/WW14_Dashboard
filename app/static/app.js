@@ -5,6 +5,7 @@ const state = {
   refreshTimer: null,
   radarTimer: null,
   radarFrames: [],
+  radarOrigin: null,
   slideIndex: 0,
   slideTimer: null,
   slideIntervalMs: 10000,
@@ -249,11 +250,12 @@ function radarMap(radar, location) {
   const first = state.radarFrames[0];
   const firstLabel = radar.stale ? "Radar gespeichert" : "Radar jetzt";
   const liveLabel = radar.stale ? "Letzter Stand" : "2 h Vorschau";
-  return `<div class="radar-map radar-map--slide">
+  return `<div class="radar-map" role="button" tabindex="0" aria-label="Regenradar für ${escapeHtml(location)} groß öffnen">
     <div class="radar-tile-grid" style="--radar-marker-x:${markerX.toFixed(1)}px;--radar-marker-y:${markerY.toFixed(1)}px;left:calc(50% - ${markerX.toFixed(1)}px);top:calc(50% - ${markerY.toFixed(1)}px)">${tiles.join("")}<img class="radar-frame" src="${escapeHtml(first.url)}" decoding="async" alt="Animierte Niederschlagsvorhersage" /></div>
     <span class="radar-marker" aria-label="${escapeHtml(location)}"></span>
     <span class="radar-time">${firstLabel} · ${formatDate(first.time, { hour: "2-digit", minute: "2-digit" })}</span>
     <span class="radar-live ${radar.stale ? "stale" : ""}"><i></i> ${liveLabel}</span>
+    <span class="radar-expand-hint" aria-hidden="true">⛶</span>
     <span class="radar-attribution"><a href="https://www.dwd.de/" target="_blank" rel="noopener">DWD</a> · © OpenStreetMap</span>
   </div>`;
 }
@@ -265,6 +267,27 @@ function fitRadarMap() {
     const scale = Math.max(map.clientWidth / 1280, map.clientHeight / 768) * 1.03;
     grid.style.transform = `scale(${scale})`;
   });
+}
+
+function openRadarDialog(map) {
+  const dialog = $("#radar-dialog");
+  if (!map || dialog.open) return;
+  state.radarOrigin = { parent: map.parentNode, nextSibling: map.nextSibling };
+  map.classList.add("radar-map--expanded");
+  $("#radar-dialog-content").append(map);
+  dialog.showModal();
+  window.requestAnimationFrame(fitRadarMap);
+}
+
+function restoreRadarMap() {
+  const map = $("#radar-dialog-content .radar-map");
+  if (!map || !state.radarOrigin) return;
+  const { parent, nextSibling } = state.radarOrigin;
+  map.classList.remove("radar-map--expanded");
+  if (nextSibling?.parentNode === parent) parent.insertBefore(map, nextSibling);
+  else parent.append(map);
+  state.radarOrigin = null;
+  window.requestAnimationFrame(fitRadarMap);
 }
 
 function startRadarAnimation() {
@@ -282,9 +305,8 @@ function startRadarAnimation() {
   let index = 0;
   state.radarTimer = window.setInterval(() => {
     index = (index + 1) % state.radarFrames.length;
-    const activeSlide = $(".dashboard-slide.is-active");
-    const images = activeSlide?.querySelectorAll(".radar-frame") || [];
-    const labels = activeSlide?.querySelectorAll(".radar-time") || [];
+    const images = document.querySelectorAll(".radar-frame");
+    const labels = document.querySelectorAll(".radar-time");
     if (!images.length || !labels.length) return;
     const frame = state.radarFrames[index];
     const offset = frame.stale
@@ -297,22 +319,16 @@ function startRadarAnimation() {
   }, 1400);
 }
 
-function renderRadarSlide(radar, location) {
-  const target = $("#radar-slide-content");
-  $("#radar-slide-location").textContent = location;
-  sourceState($("#radar-slide-state"), radar?.frames?.length ? "live" : "error");
-  target.innerHTML = radarMap(radar, location);
-  target.classList.remove("loading-block");
-  window.requestAnimationFrame(fitRadarMap);
-  startRadarAnimation();
-}
-
 function renderWeather(weather) {
+  const radarDialog = $("#radar-dialog");
+  if (radarDialog.open) radarDialog.close();
+  restoreRadarMap();
   window.clearInterval(state.radarTimer);
   state.radarTimer = null;
   state.radarFrames = [];
   sourceState($("#weather-state"), weather.status);
   const weatherLocation = weather.location || "Brandenburg an der Havel";
+  $("#radar-dialog-title").textContent = `Regenradar ${weatherLocation}`;
   $("#weather-location").textContent = weatherLocation;
   $("#weather-updated").textContent = weather.updated_at
     ? `Stand ${formatDate(weather.updated_at, { hour: "2-digit", minute: "2-digit" })}`
@@ -363,8 +379,9 @@ function renderWeather(weather) {
         </div>
       </div>`;
   }
-  renderRadarSlide(weather.radar, weatherLocation);
   target.classList.remove("loading-block");
+  window.requestAnimationFrame(fitRadarMap);
+  startRadarAnimation();
   if (weather.status === "error" && weather.message) showToast(weather.message);
 }
 
@@ -891,6 +908,22 @@ document.querySelectorAll("dialog").forEach((dialog) => {
   dialog.addEventListener("click", (event) => {
     if (event.target === dialog) dialog.close();
   });
+});
+
+$("#radar-dialog").addEventListener("close", restoreRadarMap);
+
+$("#weather-content").addEventListener("click", (event) => {
+  if (event.target.closest("a")) return;
+  const map = event.target.closest(".radar-map:not(.radar-unavailable)");
+  if (map) openRadarDialog(map);
+});
+
+$("#weather-content").addEventListener("keydown", (event) => {
+  if (event.target.closest("a") || !["Enter", " "].includes(event.key)) return;
+  const map = event.target.closest(".radar-map:not(.radar-unavailable)");
+  if (!map) return;
+  event.preventDefault();
+  openRadarDialog(map);
 });
 
 $("#slide-previous").addEventListener("click", () => showSlide(state.slideIndex - 1));

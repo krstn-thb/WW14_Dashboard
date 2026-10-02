@@ -279,9 +279,14 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
 .radar-dialog-content { flex: 1; min-height: 0; overflow: hidden; border-radius: 17px; }
 .radar-map.radar-map--expanded { width: 100%; height: 100%; border-radius: 17px; cursor: default; }
 .radar-map--expanded .radar-tile-grid {
+  width: 1280px;
+  height: 768px;
+  grid-template-columns: repeat(5, 256px);
+  grid-template-rows: repeat(3, 256px);
   transform: scale(2.2);
   transform-origin: var(--radar-marker-x) var(--radar-marker-y);
 }
+.radar-map--expanded .radar-frame { width: 1280px; height: 768px; }
 .radar-map--expanded .radar-time,
 .radar-map--expanded .radar-live,
 .radar-map--expanded .radar-attribution { padding: 6px 9px; border-radius: 8px; font-size: 13px; }
@@ -646,20 +651,22 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
 .weather-panel .weather-current {
   grid-column: 1;
   grid-row: 1;
-  flex-direction: column;
+  flex-direction: row;
   justify-content: center;
-  gap: clamp(10px, 1.1vh, 24px);
+  gap: clamp(18px, 1.6vw, 42px);
   min-height: 0;
   padding: clamp(22px, 2vw, 52px);
-  text-align: center;
+  overflow: hidden;
+  text-align: left;
   border: 1px solid rgba(216, 241, 232, .08);
   border-radius: clamp(18px, 1.3vw, 34px);
   background: linear-gradient(145deg, rgba(10, 31, 27, .78), rgba(5, 17, 15, .42));
 }
-.weather-panel .weather-current-icon { font-size: clamp(90px, 10vw, 230px); }
-.weather-panel .weather-current-temp { font-size: clamp(78px, 9vw, 215px); }
+.weather-panel .weather-current > div:last-child { min-width: 0; }
+.weather-panel .weather-current-icon { flex: 0 0 auto; font-size: clamp(82px, 7.2vw, 190px); }
+.weather-panel .weather-current-temp { white-space: nowrap; font-size: clamp(74px, 6.5vw, 175px); }
 .weather-panel .weather-current-copy strong { font-size: clamp(23px, 1.7vw, 44px); }
-.weather-panel .weather-current-copy span { display: block; margin-top: 7px; font-size: clamp(15px, 1vw, 27px); line-height: 1.35; }
+.weather-panel .weather-current-copy span { display: block; margin-top: 7px; overflow-wrap: anywhere; font-size: clamp(15px, 1vw, 27px); line-height: 1.35; }
 .weather-panel .weather-radar-preview { grid-column: 2; grid-row: 1; }
 .weather-forecast-block { min-width: 0; display: flex; flex-direction: column; gap: clamp(8px, .7vh, 15px); }
 .weather-hourly-block { grid-column: 2; grid-row: 2; }
@@ -699,24 +706,6 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
 .weather-radar-preview .radar-time { top: 10px; left: 10px; }
 .weather-radar-preview .radar-live { top: 10px; right: 10px; }
 .weather-radar-preview .radar-attribution { right: 10px; bottom: 10px; }
-
-.radar-slide-content { flex: 1; min-height: 0; overflow: hidden; border-radius: clamp(18px, 1.3vw, 34px); }
-.radar-slide-content .radar-map { width: 100%; height: 100%; border-radius: inherit; cursor: default; }
-.radar-slide-content .radar-tile-grid {
-  width: 1280px;
-  height: 768px;
-  grid-template-columns: repeat(5, 256px);
-  grid-template-rows: repeat(3, 256px);
-  transform-origin: var(--radar-marker-x) var(--radar-marker-y);
-}
-.radar-slide-content .radar-frame { width: 1280px; height: 768px; }
-.radar-slide-content .radar-time,
-.radar-slide-content .radar-live,
-.radar-slide-content .radar-attribution { padding: clamp(5px, .5vw, 13px) clamp(8px, .75vw, 18px); border-radius: 10px; font-size: clamp(12px, .8vw, 21px); }
-.radar-slide-content .radar-time { top: 14px; left: 14px; }
-.radar-slide-content .radar-live { top: 14px; right: 14px; }
-.radar-slide-content .radar-attribution { right: 14px; bottom: 14px; }
-.radar-slide-content .radar-marker { width: clamp(13px, 1vw, 25px); height: clamp(13px, 1vw, 25px); border-width: 3px; }
 
 .mensa-panel { overflow: hidden; }
 .mensa-grid {
