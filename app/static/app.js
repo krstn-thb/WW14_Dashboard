@@ -136,10 +136,11 @@ function renderClimate(climate) {
 }
 
 function urgencyLabel(days) {
-  if (days < 0) return ["abgelaufen", "now"];
-  if (days === 0) return ["heute", "now"];
-  if (days === 1) return ["morgen", "soon"];
-  if (days <= 7) return [`in ${days} Tagen`, "soon"];
+  if (days < 0) return ["abgelaufen", "critical"];
+  if (days === 0) return ["heute", "critical"];
+  if (days === 1) return ["morgen", "critical"];
+  if (days <= 7) return [`in ${days} Tagen`, "critical"];
+  if (days <= 14) return [`in ${days} Tagen`, "warning"];
   return [`in ${days} Tagen`, ""];
 }
 
@@ -150,7 +151,7 @@ function renderDeadlines(section) {
   target.innerHTML = items.length
     ? items.slice(0, 7).map((item) => {
       const [urgency, urgencyClass] = urgencyLabel(Number(item.days_remaining));
-      return `<div class="list-item">
+      return `<div class="list-item deadline-item ${urgencyClass}">
         <div class="date-tile"><strong>${formatDate(item.due, { day: "2-digit" })}</strong><span>${formatDate(item.due, { month: "short" })}</span></div>
         <div class="item-main"><strong title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</strong><div class="item-meta"><span>${escapeHtml(item.kind || "Deadline")}</span><span>·</span><span>${formatDate(item.due, { hour: "2-digit", minute: "2-digit" })}</span></div></div>
         <span class="urgency ${urgencyClass}">${urgency}</span>

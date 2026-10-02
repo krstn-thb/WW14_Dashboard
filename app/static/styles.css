@@ -180,8 +180,23 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
 .item-meta { display: flex; gap: 7px; margin-top: 4px; color: var(--muted); font-size: 11.5px; }
 .item-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .urgency { flex: 0 0 auto; color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
-.urgency.soon { color: var(--orange); }
-.urgency.now { color: var(--red); }
+.urgency.warning { color: var(--orange); font-weight: 700; }
+.urgency.critical { color: var(--red); font-weight: 700; }
+.deadline-item { border-radius: 13px; transition: background-color .25s ease, box-shadow .25s ease; }
+.deadline-item.warning {
+  border-top-color: rgba(255, 182, 111, .18);
+  background: linear-gradient(90deg, rgba(255, 182, 111, .15), rgba(255, 182, 111, .035));
+  box-shadow: inset 5px 0 0 rgba(255, 182, 111, .82);
+}
+.deadline-item.critical {
+  border-top-color: rgba(255, 143, 134, .22);
+  background: linear-gradient(90deg, rgba(255, 143, 134, .18), rgba(255, 143, 134, .04));
+  box-shadow: inset 5px 0 0 rgba(255, 143, 134, .9);
+}
+.deadline-item.warning .date-tile { background: rgba(255, 182, 111, .15); }
+.deadline-item.warning .date-tile span { color: var(--orange); }
+.deadline-item.critical .date-tile { background: rgba(255, 143, 134, .16); }
+.deadline-item.critical .date-tile span { color: var(--red); }
 
 .stock-row { display: grid; grid-template-columns: minmax(75px, 1fr) minmax(70px, 1fr) minmax(85px, 1.1fr); align-items: center; gap: 10px; padding: 14px 0; border-top: 1px solid rgba(219, 240, 232, .07); }
 .stock-row:first-child { border-top: 0; padding-top: 2px; }
