@@ -130,7 +130,7 @@ Die Yahoo-Schnittstelle ist nicht vertraglich garantiert. Für einen dauerhaften
 
 Die Vorhersage für Brandenburg an der Havel wird ohne API-Schlüssel von [Open-Meteo](https://open-meteo.com/) geladen. Sie enthält den Tagesverlauf in Drei-Stunden-Schritten. Ort, Koordinaten und Anzahl der Vorhersagetage stehen unter `weather` in `config/dashboard.yaml`.
 
-Das Regenradar nutzt das amtliche RADVOR-Produkt des Deutschen Wetterdienstes und spielt die verfügbaren Vorhersagebilder automatisch ab. Der grüne Punkt markiert Brandenburg an der Havel; das Zeitfeld wechselt von **jetzt** bis ungefähr **+120 min**. Damit die Karte auf dem Raspberry Pi erscheint, muss Chromium ausgehend auf `api.open-meteo.com`, `maps.dwd.de` und `tile.openstreetmap.org` zugreifen können.
+Das Regenradar nutzt das amtliche RADVOR-Produkt des Deutschen Wetterdienstes und spielt die verfügbaren Vorhersagebilder automatisch ab. Der grüne Punkt markiert Brandenburg an der Havel; das Zeitfeld wechselt von **jetzt** bis ungefähr **+120 min**. Bei einem vorübergehenden DWD-Aussetzer bleibt die letzte erfolgreiche Animation bis zu sechs Stunden sichtbar; alle zwei Minuten wird ein neuer Abruf versucht. Damit die Karte auf dem Raspberry Pi erscheint, muss Chromium ausgehend auf `api.open-meteo.com`, `maps.dwd.de` und `tile.openstreetmap.org` zugreifen können.
 
 ## Docker-Alternative
 

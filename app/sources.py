@@ -50,6 +50,7 @@ def _read_json(path: Path) -> list[dict[str, Any]]:
 class AsyncTTLCache:
     def __init__(self) -> None:
         self._items: dict[str, tuple[float, Any]] = {}
+        self._retry_after: dict[str, float] = {}
         self._lock = asyncio.Lock()
 
     async def get_or_load(
@@ -66,6 +67,43 @@ class AsyncTTLCache:
             value = await loader()
             self._items[key] = (time.monotonic(), value)
             return value
+
+    async def get_or_load_with_stale(
+        self,
+        key: str,
+        ttl_seconds: int,
+        stale_seconds: int,
+        retry_seconds: int,
+        loader: Callable[[], Awaitable[Any]],
+    ) -> tuple[Any, bool]:
+        """Load a value while retaining the last good result during outages."""
+        now = time.monotonic()
+        cached = self._items.get(key)
+        if cached and now - cached[0] < ttl_seconds:
+            return cached[1], False
+        if now < self._retry_after.get(key, 0):
+            if cached and now - cached[0] < stale_seconds:
+                return cached[1], True
+            raise RuntimeError("Datenquelle befindet sich in der Wiederholpause")
+        async with self._lock:
+            now = time.monotonic()
+            cached = self._items.get(key)
+            if cached and now - cached[0] < ttl_seconds:
+                return cached[1], False
+            if now < self._retry_after.get(key, 0):
+                if cached and now - cached[0] < stale_seconds:
+                    return cached[1], True
+                raise RuntimeError("Datenquelle befindet sich in der Wiederholpause")
+            try:
+                value = await loader()
+            except Exception:
+                self._retry_after[key] = time.monotonic() + retry_seconds
+                if cached and time.monotonic() - cached[0] < stale_seconds:
+                    return cached[1], True
+                raise
+            self._items[key] = (time.monotonic(), value)
+            self._retry_after.pop(key, None)
+            return value, False
 
 
 _cache = AsyncTTLCache()
@@ -512,26 +550,26 @@ async def get_stocks(config: dict[str, Any]) -> dict[str, Any]:
 
 def _weather_description(code: int) -> tuple[str, str]:
     if code == 0:
-        return "Klar", "☀️"
+        return "Klar", "clear"
     if code in {1, 2}:
-        return "Leicht bewölkt", "🌤️"
+        return "Leicht bewölkt", "partly-cloudy"
     if code == 3:
-        return "Bedeckt", "☁️"
+        return "Bedeckt", "cloudy"
     if code in {45, 48}:
-        return "Nebel", "🌫️"
+        return "Nebel", "fog"
     if code in {51, 53, 55, 56, 57}:
-        return "Nieselregen", "🌦️"
+        return "Nieselregen", "drizzle"
     if code in {61, 63, 65, 66, 67}:
-        return "Regen", "🌧️"
+        return "Regen", "rain"
     if code in {71, 73, 75, 77}:
-        return "Schnee", "🌨️"
+        return "Schnee", "snow"
     if code in {80, 81, 82}:
-        return "Regenschauer", "🌦️"
+        return "Regenschauer", "showers"
     if code in {85, 86}:
-        return "Schneeschauer", "🌨️"
+        return "Schneeschauer", "snow"
     if code in {95, 96, 99}:
-        return "Gewitter", "⛈️"
-    return "Wechselhaft", "🌥️"
+        return "Gewitter", "thunderstorm"
+    return "Wechselhaft", "partly-cloudy"
 
 
 def _parse_radar_time(value: str) -> datetime | None:
@@ -645,6 +683,49 @@ def _radar_frames_from_capabilities(
     ]
 
 
+async def _get_radar(section: dict[str, Any]) -> dict[str, Any] | None:
+    latitude = float(section.get("latitude", 52.4125))
+    longitude = float(section.get("longitude", 12.5316))
+    cache_key = f"weather:radar:{latitude}:{longitude}"
+
+    async def load() -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
+            response = await client.get(
+                "https://maps.dwd.de/geoserver/dwd/wms",
+                params={
+                    "service": "WMS",
+                    "version": "1.1.1",
+                    "request": "GetCapabilities",
+                },
+            )
+            response.raise_for_status()
+            frames = _radar_frames_from_capabilities(response.content)
+            if not frames:
+                raise ValueError("DWD liefert momentan keine Radar-Zeitpunkte")
+            return {
+                "endpoint": "https://maps.dwd.de/geoserver/dwd/wms",
+                "layer": "dwd:Radar_rv_product_1x1km_ger",
+                "frames": frames,
+                "latitude": latitude,
+                "longitude": longitude,
+                "zoom": 7,
+                "source": "DWD RADVOR",
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+
+    try:
+        radar, stale = await _cache.get_or_load_with_stale(
+            cache_key,
+            max(30, int(section.get("radar_cache_seconds", 120))),
+            max(300, int(section.get("radar_stale_seconds", 21600))),
+            max(30, int(section.get("radar_retry_seconds", 120))),
+            load,
+        )
+        return {**radar, "stale": stale}
+    except Exception:
+        return None
+
+
 async def get_weather(config: dict[str, Any]) -> dict[str, Any]:
     section = config.get("weather", {})
     if not section.get("enabled", False):
@@ -671,32 +752,6 @@ async def get_weather(config: dict[str, Any]) -> dict[str, Any]:
             )
             response.raise_for_status()
             payload = response.json()
-            radar: dict[str, Any] | None = None
-            try:
-                radar_response = await client.get(
-                    "https://maps.dwd.de/geoserver/dwd/wms",
-                    params={
-                        "service": "WMS",
-                        "version": "1.1.1",
-                        "request": "GetCapabilities",
-                    },
-                )
-                radar_response.raise_for_status()
-                frames = _radar_frames_from_capabilities(radar_response.content)
-                if frames:
-                    radar = {
-                        "endpoint": "https://maps.dwd.de/geoserver/dwd/wms",
-                        "layer": "dwd:Radar_rv_product_1x1km_ger",
-                        "frames": frames,
-                        "latitude": float(params["latitude"]),
-                        "longitude": float(params["longitude"]),
-                        "zoom": 7,
-                        "source": "DWD RADVOR",
-                    }
-            except Exception:
-                # Radar is optional; forecast data should remain available.
-                radar = None
-
         current = payload.get("current", {})
         current_code = int(current.get("weather_code", -1))
         current_label, current_icon = _weather_description(current_code)
@@ -766,13 +821,15 @@ async def get_weather(config: dict[str, Any]) -> dict[str, Any]:
             },
             "hourly": hourly_items,
             "daily": items,
-            "radar": radar,
             "updated_at": datetime.now(UTC).isoformat(),
         }
 
     try:
-        return await _cache.get_or_load(
-            "weather",
+        forecast = await _cache.get_or_load(
+            "weather:forecast:"
+            f'{section.get("latitude", 52.4125)}:'
+            f'{section.get("longitude", 12.5316)}:'
+            f'{section.get("timezone", "Europe/Berlin")}',
             int(section.get("cache_seconds", 900)),
             load,
         )
@@ -785,4 +842,5 @@ async def get_weather(config: dict[str, Any]) -> dict[str, Any]:
             "daily": [],
             "radar": None,
         }
+    return {**forecast, "radar": await _get_radar(section)}
 

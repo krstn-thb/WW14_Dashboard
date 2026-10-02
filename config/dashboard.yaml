@@ -79,4 +79,7 @@ weather:
   timezone: "Europe/Berlin"
   forecast_days: 5
   cache_seconds: 900
+  radar_cache_seconds: 120
+  radar_retry_seconds: 120
+  radar_stale_seconds: 21600
 

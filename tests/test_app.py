@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.sources import get_weather
+from app.sources import AsyncTTLCache, _weather_description, get_weather
 
 
 def make_config(tmp_path: Path) -> Path:
@@ -257,10 +257,54 @@ def test_weather_includes_todays_timeline_and_radar(monkeypatch) -> None:
     )
 
     assert result["status"] == "live"
+    assert result["current"]["icon"] == "partly-cloudy"
     assert len(result["hourly"]) == 8
     assert result["hourly"][3]["is_current"] is True
     assert result["radar"]["source"] == "DWD RADVOR"
+    assert result["radar"]["stale"] is False
     assert len(result["radar"]["frames"]) >= 8
     assert result["radar"]["frames"][0]["minutes_ahead"] == 0
     assert result["radar"]["frames"][-1]["minutes_ahead"] >= 110
+
+
+def test_cache_keeps_last_good_value_during_temporary_failure() -> None:
+    cache = AsyncTTLCache()
+    attempts = 0
+
+    async def exercise_cache() -> None:
+        nonlocal attempts
+
+        async def succeeds():
+            nonlocal attempts
+            attempts += 1
+            return {"frames": ["radar"]}
+
+        async def fails():
+            nonlocal attempts
+            attempts += 1
+            raise RuntimeError("DWD timeout")
+
+        first, first_stale = await cache.get_or_load_with_stale(
+            "radar", 0, 3600, 120, succeeds
+        )
+        fallback, fallback_stale = await cache.get_or_load_with_stale(
+            "radar", 0, 3600, 120, fails
+        )
+        during_retry, retry_stale = await cache.get_or_load_with_stale(
+            "radar", 0, 3600, 120, fails
+        )
+
+        assert first == fallback == during_retry
+        assert first_stale is False
+        assert fallback_stale is True
+        assert retry_stale is True
+
+    asyncio.run(exercise_cache())
+    assert attempts == 2
+
+
+def test_weather_icons_use_local_svg_names() -> None:
+    assert _weather_description(0) == ("Klar", "clear")
+    assert _weather_description(3) == ("Bedeckt", "cloudy")
+    assert _weather_description(95) == ("Gewitter", "thunderstorm")
 

@@ -24,6 +24,15 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+const weatherIconNames = new Set([
+  "clear", "partly-cloudy", "cloudy", "fog", "drizzle", "rain", "showers", "snow", "thunderstorm",
+]);
+
+function weatherIcon(name) {
+  const normalized = weatherIconNames.has(name) ? name : "partly-cloudy";
+  return `<svg class="weather-icon weather-icon--${normalized}" viewBox="0 0 24 24" aria-hidden="true"><use href="#weather-${normalized}"></use></svg>`;
+}
+
 function sortedTagEntries(tags = {}) {
   return Object.entries(tags).sort(([left], [right]) => left.localeCompare(right));
 }
@@ -238,14 +247,16 @@ function radarMap(radar) {
       transparent: "true",
       time: frame.time,
     });
-    return { ...frame, url: `${endpoint}?${query.toString()}` };
+    return { ...frame, stale: Boolean(radar.stale), url: `${endpoint}?${query.toString()}` };
   });
   const first = state.radarFrames[0];
+  const firstLabel = radar.stale ? "Radar gespeichert" : "Radar jetzt";
+  const liveLabel = radar.stale ? "Letzter Stand" : "2 h Vorschau";
   return `<div class="radar-map" role="button" tabindex="0" aria-label="Regenradar groß öffnen" title="Regenradar groß öffnen">
     <div class="radar-tile-grid" style="--radar-marker-x:${markerX.toFixed(1)}px;--radar-marker-y:${markerY.toFixed(1)}px;left:calc(50% - ${markerX.toFixed(1)}px);top:calc(50% - ${markerY.toFixed(1)}px)">${tiles.join("")}<img id="radar-frame" class="radar-frame" src="${escapeHtml(first.url)}" decoding="async" alt="Animierte Niederschlagsvorhersage" /></div>
     <span class="radar-marker" aria-label="Brandenburg an der Havel"></span>
-    <span id="radar-time" class="radar-time">Radar jetzt · ${formatDate(first.time, { hour: "2-digit", minute: "2-digit" })}</span>
-    <span class="radar-live"><i></i> 2 h Vorschau</span>
+    <span id="radar-time" class="radar-time">${firstLabel} · ${formatDate(first.time, { hour: "2-digit", minute: "2-digit" })}</span>
+    <span class="radar-live ${radar.stale ? "stale" : ""}"><i></i> ${liveLabel}</span>
     <span class="radar-expand-hint" aria-hidden="true">⛶</span>
     <span class="radar-attribution"><a href="https://www.dwd.de/" target="_blank" rel="noopener">DWD</a> · © OpenStreetMap</span>
   </div>`;
@@ -289,8 +300,10 @@ function startRadarAnimation() {
     index = (index + 1) % state.radarFrames.length;
     const frame = state.radarFrames[index];
     image.src = frame.url;
-    const offset = Number(frame.minutes_ahead) > 0 ? `+${frame.minutes_ahead} min` : "jetzt";
-    label.textContent = `Radar ${offset} · ${formatDate(frame.time, { hour: "2-digit", minute: "2-digit" })}`;
+    const offset = frame.stale
+      ? "Letzter Stand"
+      : Number(frame.minutes_ahead) > 0 ? `Radar +${frame.minutes_ahead} min` : "Radar jetzt";
+    label.textContent = `${offset} · ${formatDate(frame.time, { hour: "2-digit", minute: "2-digit" })}`;
   }, 1400);
 }
 
@@ -316,7 +329,7 @@ function renderWeather(weather) {
     target.innerHTML = `
       <div class="weather-top">
         <div class="weather-current">
-          <div class="weather-current-icon" aria-hidden="true">${escapeHtml(current.icon)}</div>
+          <div class="weather-current-icon" aria-hidden="true">${weatherIcon(current.icon)}</div>
           <div>
             <div class="weather-current-temp">${formatNumber(current.temperature, 1)}°</div>
             <div class="weather-current-copy">
@@ -330,7 +343,7 @@ function renderWeather(weather) {
       <div class="weather-hourly" aria-label="Wetterverlauf heute">
         ${hourly.map((hour) => `<div class="weather-hour ${hour.is_current ? "current" : ""}" title="${escapeHtml(hour.label)} · ${formatNumber(hour.precipitation_probability, 0)} % Regen">
           <strong>${formatDate(hour.time, { hour: "2-digit", minute: "2-digit" })}</strong>
-          <span class="weather-hour-icon" aria-hidden="true">${escapeHtml(hour.icon)}</span>
+          <span class="weather-hour-icon" aria-hidden="true">${weatherIcon(hour.icon)}</span>
           <span class="weather-hour-temp">${formatNumber(hour.temperature, 0)}°</span>
           <span class="weather-hour-rain">${formatNumber(hour.precipitation_probability, 0)} %</span>
         </div>`).join("")}
@@ -338,7 +351,7 @@ function renderWeather(weather) {
       <div class="weather-days">
         ${daily.slice(0, 5).map((day) => `<div class="weather-day" title="${escapeHtml(day.label)}">
           <strong>${formatDate(`${day.date}T12:00:00`, { weekday: "short" })}</strong>
-          <span class="weather-day-icon" aria-hidden="true">${escapeHtml(day.icon)}</span>
+          <span class="weather-day-icon" aria-hidden="true">${weatherIcon(day.icon)}</span>
           <span class="weather-day-temp">${formatNumber(day.temperature_max, 0)}° / ${formatNumber(day.temperature_min, 0)}°</span>
           <span class="weather-day-rain">${formatNumber(day.precipitation_probability, 0)} %</span>
         </div>`).join("")}

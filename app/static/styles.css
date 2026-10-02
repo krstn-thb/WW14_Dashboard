@@ -32,6 +32,24 @@ body {
 
 button, input { font: inherit; }
 button { color: inherit; }
+.weather-symbols { position: absolute; width: 0; height: 0; overflow: hidden; }
+.weather-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.weather-icon--clear { color: #ffd27d; }
+.weather-icon--partly-cloudy { color: #c9ddd6; }
+.weather-icon--cloudy, .weather-icon--fog { color: #b2c8c1; }
+.weather-icon--drizzle, .weather-icon--rain, .weather-icon--showers { color: var(--blue); }
+.weather-icon--snow { color: #d9efff; }
+.weather-icon--thunderstorm { color: #ffd27d; }
 
 .ambient {
   display: none;
@@ -211,6 +229,8 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
 .radar-time { top: 4px; left: 4px; }
 .radar-live { top: 4px; right: 4px; }
 .radar-live i { display: inline-block; width: 5px; height: 5px; margin-right: 2px; border-radius: 50%; background: var(--green); box-shadow: 0 0 7px var(--green); }
+.radar-live.stale { color: var(--orange); }
+.radar-live.stale i { background: var(--orange); box-shadow: 0 0 7px var(--orange); }
 .radar-expand-hint { position: absolute; z-index: 2; left: 5px; bottom: 5px; display: grid; place-items: center; width: 19px; height: 19px; border-radius: 5px; background: rgba(4, 13, 12, .8); color: var(--text); font-size: 13px; }
 .radar-attribution { right: 4px; bottom: 4px; }
 .radar-attribution a { color: inherit; }
