@@ -340,21 +340,27 @@ function renderWeather(weather) {
           ${radarMap(weather.radar, weatherLocation)}
         </div>
       </div>
-      <div class="weather-hourly" aria-label="Wetterverlauf heute">
-        ${hourly.map((hour) => `<div class="weather-hour ${hour.is_current ? "current" : ""}" title="${escapeHtml(hour.label)} · ${formatNumber(hour.precipitation_probability, 0)} % Regen">
-          <strong>${formatDate(hour.time, { hour: "2-digit", minute: "2-digit" })}</strong>
-          <span class="weather-hour-icon" aria-hidden="true">${escapeHtml(hour.icon)}</span>
-          <span class="weather-hour-temp">${formatNumber(hour.temperature, 0)}°</span>
-          <span class="weather-hour-rain">${formatNumber(hour.precipitation_probability, 0)} %</span>
-        </div>`).join("")}
+      <div class="weather-forecast-block weather-hourly-block">
+        <div class="weather-section-heading"><strong>Heute im Verlauf</strong><span>Regenwahrscheinlichkeit</span></div>
+        <div class="weather-hourly" aria-label="Wetterverlauf heute">
+          ${hourly.map((hour) => `<div class="weather-hour ${hour.is_current ? "current" : ""}" title="${escapeHtml(hour.label)} · ${formatNumber(hour.precipitation_probability, 0)} % Regen">
+            <strong>${formatDate(hour.time, { hour: "2-digit", minute: "2-digit" })}</strong>
+            <span class="weather-hour-icon" aria-hidden="true">${escapeHtml(hour.icon)}</span>
+            <span class="weather-hour-temp">${formatNumber(hour.temperature, 0)}°</span>
+            <span class="weather-hour-rain">${formatNumber(hour.precipitation_probability, 0)} %</span>
+          </div>`).join("")}
+        </div>
       </div>
-      <div class="weather-days">
-        ${daily.slice(0, 5).map((day) => `<div class="weather-day" title="${escapeHtml(day.label)}">
-          <strong>${formatDate(`${day.date}T12:00:00`, { weekday: "short" })}</strong>
-          <span class="weather-day-icon" aria-hidden="true">${escapeHtml(day.icon)}</span>
-          <span class="weather-day-temp">${formatNumber(day.temperature_max, 0)}° / ${formatNumber(day.temperature_min, 0)}°</span>
-          <span class="weather-day-rain">${formatNumber(day.precipitation_probability, 0)} %</span>
-        </div>`).join("")}
+      <div class="weather-forecast-block weather-days-block">
+        <div class="weather-section-heading"><strong>5-Tage-Ausblick</strong><span>Höchst- / Tiefstwert</span></div>
+        <div class="weather-days">
+          ${daily.slice(0, 5).map((day) => `<div class="weather-day" title="${escapeHtml(day.label)}">
+            <strong>${formatDate(`${day.date}T12:00:00`, { weekday: "short" })}</strong>
+            <span class="weather-day-icon" aria-hidden="true">${escapeHtml(day.icon)}</span>
+            <span class="weather-day-temp">${formatNumber(day.temperature_max, 0)}° / ${formatNumber(day.temperature_min, 0)}°</span>
+            <span class="weather-day-rain">${formatNumber(day.precipitation_probability, 0)} %</span>
+          </div>`).join("")}
+        </div>
       </div>`;
   }
   renderRadarSlide(weather.radar, weatherLocation);
