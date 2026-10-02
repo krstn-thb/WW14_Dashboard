@@ -19,6 +19,7 @@ from app.sources import (
     get_climate,
     get_deadlines,
     get_events,
+    get_mensa,
     get_stocks,
     get_weather,
     search_stocks,
@@ -40,6 +41,7 @@ class StockCreate(BaseModel):
     symbol: str = Field(min_length=1, max_length=32)
     label: str = Field(default="", max_length=120)
     currency: str = Field(default="", max_length=8)
+    asset_type: str = Field(default="stock", max_length=16)
 
 
 class ClimateMetricCreate(BaseModel):
@@ -220,12 +222,13 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
                     "timezone": weather_location["timezone"],
                 }
             )
-        climate, deadlines, events, stocks, weather = await asyncio.gather(
+        climate, deadlines, events, stocks, weather, mensa = await asyncio.gather(
             get_climate(source_config),
             get_deadlines(source_config, timezone),
             get_events(source_config, timezone),
             get_stocks(source_config),
             get_weather(source_config),
+            get_mensa(source_config),
         )
         response.headers["Cache-Control"] = "no-store"
         dashboard_config = config.get("dashboard", {})
@@ -243,6 +246,7 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
             "events": events,
             "stocks": stocks,
             "weather": weather,
+            "mensa": mensa,
             "todos": todos,
         }
 
@@ -302,6 +306,7 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
             symbol,
             payload.label.strip() or symbol,
             payload.currency.strip().upper(),
+            "crypto" if payload.asset_type.strip().lower() == "crypto" else "stock",
         )
 
     @application.delete("/api/stocks/{symbol}", status_code=status.HTTP_204_NO_CONTENT)

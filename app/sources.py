@@ -6,6 +6,7 @@ import math
 import re
 import time
 from datetime import UTC, date, datetime, time as datetime_time, timedelta
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 from urllib.parse import quote
@@ -107,6 +108,7 @@ class AsyncTTLCache:
 
 
 _cache = AsyncTTLCache()
+_currency_cache = AsyncTTLCache()
 
 
 def _demo_series(base: float, amplitude: float, count: int = 28) -> list[dict[str, Any]]:
@@ -450,6 +452,40 @@ async def _fetch_yahoo_stock(symbol: str) -> dict[str, Any]:
     }
 
 
+async def _quote_in_euro(quote: dict[str, Any]) -> dict[str, Any]:
+    currency = str(quote.get("currency") or "EUR").upper()
+    if currency == "EUR":
+        return {**quote, "currency": "EUR"}
+
+    async def load_rate() -> float:
+        rate_quote = await _fetch_yahoo_stock(f"{currency}EUR=X")
+        rate = rate_quote.get("price")
+        if not isinstance(rate, (int, float)) or rate <= 0:
+            raise ValueError(f"Kein EUR-Wechselkurs für {currency}")
+        return float(rate)
+
+    # Keep exchange rates in a separate cache. Stock lists are themselves loaded
+    # through _cache, so reusing that lock here would deadlock for non-EUR quotes.
+    rate, _ = await _currency_cache.get_or_load_with_stale(
+        f"currency:{currency}:EUR",
+        3600,
+        86400,
+        300,
+        load_rate,
+    )
+
+    converted = {**quote, "currency": "EUR", "original_currency": currency}
+    for key in ("price", "previous_close"):
+        value = quote.get(key)
+        if isinstance(value, (int, float)):
+            converted[key] = value * rate
+    converted["points"] = [
+        value * rate if isinstance(value, (int, float)) else value
+        for value in quote.get("points", [])
+    ]
+    return converted
+
+
 async def search_stocks(query: str) -> list[dict[str, str]]:
     params = {
         "q": query,
@@ -472,7 +508,8 @@ async def search_stocks(query: str) -> list[dict[str, str]]:
             payload = response.json()
         results: list[dict[str, str]] = []
         for item in payload.get("quotes", []):
-            if item.get("quoteType") not in {"EQUITY", "ETF"}:
+            quote_type = str(item.get("quoteType", "")).upper()
+            if quote_type not in {"EQUITY", "ETF", "CRYPTOCURRENCY"}:
                 continue
             symbol = str(item.get("symbol", "")).strip().upper()
             if not symbol:
@@ -486,6 +523,9 @@ async def search_stocks(query: str) -> list[dict[str, str]]:
                     "exchange": str(
                         item.get("exchDisp") or item.get("exchange") or ""
                     ),
+                    "asset_type": "crypto"
+                    if quote_type == "CRYPTOCURRENCY"
+                    else "stock",
                 }
             )
         return results
@@ -510,9 +550,10 @@ def _demo_stocks(section: dict[str, Any]) -> list[dict[str, Any]]:
                 **item,
                 "price": values[-1],
                 "change_percent": change,
-                "currency": item.get("currency", "EUR"),
+                "currency": "EUR",
                 "points": values,
                 "status": "demo",
+                "asset_type": item.get("asset_type", "stock"),
             }
         )
     return result
@@ -523,14 +564,16 @@ async def get_stocks(config: dict[str, Any]) -> dict[str, Any]:
     if not section.get("enabled", False) or section.get("provider", "demo") == "demo":
         return {
             "status": "demo",
-            "message": "Beispieldaten – Aktienquelle noch nicht aktiviert",
+            "message": "Beispieldaten – Marktquelle noch nicht aktiviert",
             "items": _demo_stocks(section),
         }
 
     async def load() -> list[dict[str, Any]]:
         results = []
         for item in section.get("symbols", []):
-            quote_data = await _fetch_yahoo_stock(item["symbol"])
+            quote_data = await _quote_in_euro(
+                await _fetch_yahoo_stock(item["symbol"])
+            )
             results.append({**item, **quote_data, "status": "live"})
         return results
 
@@ -545,6 +588,201 @@ async def get_stocks(config: dict[str, Any]) -> dict[str, Any]:
             "status": "error",
             "message": f"Aktienkurse nicht erreichbar: {exc}",
             "items": _demo_stocks(section),
+        }
+
+
+class _MensaHTMLParser(HTMLParser):
+    """Extract the menu sections from the public iMensa day page."""
+
+    _menu_headings = (
+        "angebot",
+        "tagesangebot",
+        "salattheke",
+        "salatbar",
+        "dessert",
+        "suppe",
+        "menü",
+        "buffet",
+    )
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.sections: list[tuple[str, list[str]]] = []
+        self._heading_parts: list[str] = []
+        self._section_parts: list[str] = []
+        self._heading = ""
+        self._in_heading = False
+        self._ignored_depth = 0
+
+    def _finish_section(self) -> None:
+        if self._heading and self._section_parts:
+            self.sections.append((self._heading, self._section_parts))
+        self._heading = ""
+        self._section_parts = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in {"script", "style", "svg"}:
+            self._ignored_depth += 1
+            return
+        if self._ignored_depth:
+            return
+        if tag in {"h2", "h3"}:
+            self._finish_section()
+        if tag == "h3":
+            self._in_heading = True
+            self._heading_parts = []
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in {"script", "style", "svg"} and self._ignored_depth:
+            self._ignored_depth -= 1
+            return
+        if self._ignored_depth:
+            return
+        if tag == "h3" and self._in_heading:
+            heading = " ".join(self._heading_parts).strip()
+            if heading.lower().startswith(self._menu_headings):
+                self._heading = heading
+            self._in_heading = False
+
+    def handle_data(self, data: str) -> None:
+        if self._ignored_depth:
+            return
+        text = " ".join(data.split())
+        if not text:
+            return
+        if self._in_heading:
+            self._heading_parts.append(text)
+        elif self._heading:
+            self._section_parts.append(text)
+
+    def close(self) -> None:
+        super().close()
+        self._finish_section()
+
+
+def _parse_mensa_menu(content: str) -> list[dict[str, Any]]:
+    parser = _MensaHTMLParser()
+    parser.feed(content)
+    parser.close()
+    items: list[dict[str, Any]] = []
+    metadata_markers = (
+        "zusatz",
+        "allergen",
+        "nährwert",
+        "knoblauch",
+        "vegan",
+        "vegetarisch",
+        "geflügel",
+        "schwein",
+        "rind",
+        "fisch",
+    )
+    badge_labels = (
+        ("vegan", "Vegan"),
+        ("vegetarisch", "Vegetarisch"),
+        ("geflügel", "Geflügel"),
+        ("schwein", "Schwein"),
+        ("rind", "Rind"),
+        ("fisch", "Fisch"),
+    )
+
+    for category, parts in parser.sections:
+        full_text = " ".join(parts)
+        lowered = full_text.lower()
+        prices = list(dict.fromkeys(re.findall(r"\d+[,.]\d{2}\s*€", full_text)))
+        calories = re.search(r"(\d+)\s*kcal", full_text, flags=re.IGNORECASE)
+        badges = [label for marker, label in badge_labels if marker in lowered]
+
+        if category.lower().startswith(("salattheke", "salatbar")):
+            descriptions = [
+                part
+                for part in parts
+                if "€" not in part
+                and not any(marker in part.lower() for marker in metadata_markers)
+                and "installieren" not in part.lower()
+            ][:3]
+            name = " · ".join(descriptions) or "Salat nach Wahl"
+        else:
+            name = next(
+                (
+                    part
+                    for part in parts
+                    if "€" not in part
+                    and not any(marker in part.lower() for marker in metadata_markers)
+                    and "installieren" not in part.lower()
+                ),
+                "",
+            )
+        if not name:
+            continue
+        items.append(
+            {
+                "category": category,
+                "name": name,
+                "price": " / ".join(price.replace(".", ",") for price in prices),
+                "calories": int(calories.group(1)) if calories else None,
+                "badges": badges,
+            }
+        )
+    return items
+
+
+async def get_mensa(config: dict[str, Any]) -> dict[str, Any]:
+    section = config.get("mensa", {})
+    if not section.get("enabled", False):
+        return {"status": "disabled", "items": [], "message": "Mensa-Anzeige deaktiviert"}
+
+    timezone_name = str(config.get("dashboard", {}).get("timezone", "Europe/Berlin"))
+    try:
+        timezone = ZoneInfo(timezone_name)
+    except Exception:
+        timezone = ZoneInfo("Europe/Berlin")
+    today = datetime.now(timezone).date()
+    target_date = today
+    if today.weekday() >= 5:
+        target_date += timedelta(days=7 - today.weekday())
+    weekdays = ("montag", "dienstag", "mittwoch", "donnerstag", "freitag")
+    weekday = weekdays[target_date.weekday()]
+    base_url = str(section.get("base_url") or "https://www.imensa.de/brandenburg-an-der-havel/mensa-brandenburg-an-der-havel").rstrip("/")
+    url = f"{base_url}/{weekday}.html"
+
+    async def load() -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
+            response = await client.get(url, headers={"User-Agent": "WW14-Dashboard/1.0"})
+            response.raise_for_status()
+        items = _parse_mensa_menu(response.text)
+        if not items:
+            raise ValueError("Auf der iMensa-Seite wurden keine Gerichte gefunden")
+        return {
+            "items": items,
+            "date": target_date.isoformat(),
+            "weekday": weekday.capitalize(),
+            "source_url": url,
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+
+    try:
+        menu, stale = await _cache.get_or_load_with_stale(
+            f"mensa:{target_date.isoformat()}",
+            max(300, int(section.get("cache_seconds", 1800))),
+            max(3600, int(section.get("stale_seconds", 43200))),
+            max(60, int(section.get("retry_seconds", 300))),
+            load,
+        )
+        return {
+            **menu,
+            "status": "live",
+            "stale": stale,
+            "message": "Zuletzt geladener Speiseplan" if stale else "Preise für Studierende · Angaben ohne Gewähr",
+        }
+    except Exception as exc:
+        return {
+            "status": "error",
+            "items": [],
+            "date": target_date.isoformat(),
+            "weekday": weekday.capitalize(),
+            "source_url": url,
+            "message": f"Speiseplan momentan nicht erreichbar: {exc}",
         }
 
 

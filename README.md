@@ -1,18 +1,20 @@
 # WW14 Dashboard
 
-Vollbild-Dashboard für einen Raspberry Pi 5. Es bündelt Loxone-Klimadaten aus InfluxDB, Journal- und Konferenz-Deadlines, wichtige Kalendertermine, ausgewählte Aktienkurse und eine gemeinsame To-do-Liste.
+Vollbild-Dashboard für einen Raspberry Pi 5. Es bündelt Loxone-Klimadaten aus InfluxDB, Journal- und Konferenz-Deadlines, wichtige Kalendertermine, Aktien- und Kryptokurse, den Mensa-Speiseplan und eine gemeinsame To-do-Liste.
 
 Das Projekt ist bewusst schlank aufgebaut: Ein Python-Dienst liefert Daten und Oberfläche, Chromium zeigt sie im Vollbildmodus. Auf dem Raspberry Pi ist kein KI-Agent notwendig.
 
 ## Aktueller Funktionsumfang
 
-- responsive Vollbild-Oberfläche für 16:9-Monitore, optimiert für Full HD und 4K
+- OLED-taugliche Vollbild-Slides für 16:9-Monitore, optimiert für Full HD und 4K
+- automatischer Slide-Wechsel alle zehn Sekunden; Pfeiltasten schalten manuell, eine Mausbewegung pausiert die Automatik
 - selbstständige Aktualisierung; Standardintervall 60 Sekunden
 - Loxone-/InfluxDB-Messwerte mit 24-Stunden-Verlauf
 - Auswahl vorhandener InfluxDB-Messfelder direkt im Dashboard
 - Deadlines und wichtige Termine direkt im Dashboard eintragen und löschen
 - frei wählbarer Wetterort mit Tagesverlauf und animierter DWD-Regenvorschau für die nächsten zwei Stunden
-- Aktienkurse mit Suche, Hinzufügen und Entfernen im Dashboard
+- Aktien- und Kryptokurse mit Suche, Hinzufügen und Entfernen; alle Preise werden in Euro angezeigt
+- werktäglich automatisch geladener Speiseplan der Mensa Brandenburg an der Havel
 - persistente To-do-Liste in SQLite
 - Offline-Anzeige und Fehlerisolierung je Datenquelle
 - automatischer Start als Benutzer-Service und Chromium-Vollbild auf Raspberry Pi OS
@@ -120,11 +122,17 @@ Im Feld **Wichtige Termine** auf **+** klicken. Titel und Beginn sind erforderli
 
 Beim ersten Start einer älteren Installation werden vorhandene Einträge aus `data/events.json` einmalig übernommen.
 
-### Aktien
+### Aktien und Kryptowährungen
 
-Vonovia (`VNA.DE`) ist standardmäßig die erste Aktie. Über **+** im Aktienfeld kann nach einem Unternehmen oder Börsenkürzel gesucht werden. Ein Treffer wird per Klick hinzugefügt; ausgewählte Aktien lassen sich im selben Fenster wieder entfernen.
+Vonovia (`VNA.DE`) ist standardmäßig die erste Aktie. Über **+** im Märkte-Feld kann nach einem Unternehmen, einer Kryptowährung oder einem Kürzel gesucht werden. Ein Treffer wird per Klick hinzugefügt; ausgewählte Werte lassen sich im selben Fenster wieder entfernen. Kurse in anderen Währungen werden anhand des jeweils aktuellen Yahoo-Wechselkurses in Euro umgerechnet.
 
 Die Yahoo-Schnittstelle ist nicht vertraglich garantiert. Für einen dauerhaften Produktivbetrieb sollte später ein offizieller Marktdatenanbieter mit API-Schlüssel ergänzt werden.
+
+### Mensa
+
+Die Mensa-Slide lädt den aktuellen Werktagsplan der Mensa Brandenburg an der Havel von [iMensa](https://www.imensa.de/brandenburg-an-der-havel/mensa-brandenburg-an-der-havel/montag.html). Am Wochenende wird der nächste Montag angezeigt. Erfolgreich geladene Daten bleiben bei einem kurzen Ausfall bis zu zwölf Stunden als Rückfall erhalten.
+
+Die Quelle kann unter `mensa.base_url` in `config/dashboard.yaml` geändert und die Slide mit `mensa.enabled: false` abgeschaltet werden.
 
 ### Wetter und Regenradar
 
@@ -158,7 +166,8 @@ FastAPI-Dashboard ─── SQLite (To-do und lokale Auswahl)
         ├──────────── InfluxDB (Loxone)
         ├──────────── SQLite (Deadlines, Termine und To-dos)
         ├──────────── Open-Meteo (Wetter)
-        └──────────── Marktdatenanbieter (Aktien)
+        ├──────────── Marktdatenanbieter (Aktien, Krypto und EUR-Wechselkurse)
+        └──────────── iMensa (Mensa-Speiseplan)
 ```
 
 Ein Agent auf dem Pi wäre nur nötig, wenn später unstrukturierte Inhalte automatisch gesucht, bewertet oder zusammengefasst werden sollen. Für Abfragen, Aktualisierung und Anzeige genügen deterministische Hintergrunddienste – sie sind zuverlässiger, sparsamer und leichter zu warten.

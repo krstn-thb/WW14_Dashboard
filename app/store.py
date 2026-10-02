@@ -31,11 +31,20 @@ class TodoStore:
                     symbol TEXT PRIMARY KEY COLLATE NOCASE,
                     label TEXT NOT NULL,
                     currency TEXT NOT NULL DEFAULT '',
+                    asset_type TEXT NOT NULL DEFAULT 'stock',
                     sort_order INTEGER NOT NULL,
                     created_at TEXT NOT NULL
                 )
                 """
             )
+            stock_columns = {
+                row["name"]
+                for row in connection.execute("PRAGMA table_info(stocks)").fetchall()
+            }
+            if "asset_type" not in stock_columns:
+                connection.execute(
+                    "ALTER TABLE stocks ADD COLUMN asset_type TEXT NOT NULL DEFAULT 'stock'"
+                )
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS climate_metrics (
@@ -206,13 +215,14 @@ class TodoStore:
                 connection.execute(
                     """
                     INSERT OR IGNORE INTO stocks
-                        (symbol, label, currency, sort_order, created_at)
-                    VALUES (?, ?, ?, ?, ?)
+                        (symbol, label, currency, asset_type, sort_order, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     (
                         symbol,
                         str(item.get("label") or symbol).strip(),
                         str(item.get("currency", "")).strip().upper(),
+                        str(item.get("asset_type") or "stock").strip().lower(),
                         index,
                         now,
                     ),
@@ -223,11 +233,17 @@ class TodoStore:
     def list_stocks(self) -> list[dict[str, Any]]:
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT symbol, label, currency FROM stocks ORDER BY sort_order, created_at"
+                "SELECT symbol, label, currency, asset_type FROM stocks ORDER BY sort_order, created_at"
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def add_stock(self, symbol: str, label: str, currency: str = "") -> dict[str, Any]:
+    def add_stock(
+        self,
+        symbol: str,
+        label: str,
+        currency: str = "",
+        asset_type: str = "stock",
+    ) -> dict[str, Any]:
         symbol = symbol.strip().upper()
         label = label.strip() or symbol
         now = datetime.now(UTC).isoformat()
@@ -237,16 +253,26 @@ class TodoStore:
             ).fetchone()[0]
             connection.execute(
                 """
-                INSERT INTO stocks (symbol, label, currency, sort_order, created_at)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO stocks
+                    (symbol, label, currency, asset_type, sort_order, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(symbol) DO UPDATE SET
                     label = excluded.label,
-                    currency = CASE WHEN excluded.currency = '' THEN stocks.currency ELSE excluded.currency END
+                    currency = CASE WHEN excluded.currency = '' THEN stocks.currency ELSE excluded.currency END,
+                    asset_type = excluded.asset_type
                 """,
-                (symbol, label, currency.strip().upper(), next_order, now),
+                (
+                    symbol,
+                    label,
+                    currency.strip().upper(),
+                    asset_type if asset_type in {"stock", "crypto"} else "stock",
+                    next_order,
+                    now,
+                ),
             )
             row = connection.execute(
-                "SELECT symbol, label, currency FROM stocks WHERE symbol = ?", (symbol,)
+                "SELECT symbol, label, currency, asset_type FROM stocks WHERE symbol = ?",
+                (symbol,),
             ).fetchone()
         return dict(row)
 

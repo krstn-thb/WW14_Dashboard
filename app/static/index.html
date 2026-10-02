@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#071311" />
     <title>WW14 Dashboard</title>
-    <link rel="stylesheet" href="/styles.css?v=20261002-3" />
+    <link rel="stylesheet" href="/styles.css?v=20261002-5" />
   </head>
   <body>
     <div class="ambient ambient-one" aria-hidden="true"></div>
@@ -14,7 +14,7 @@
     <main class="shell">
       <header class="topbar">
         <div class="brand">
-          <div class="brand-mark" aria-hidden="true">W</div>
+          <img class="brand-logo" src="/thb-fbt-logo.png" alt="Technische Hochschule Brandenburg · Fachbereich Technik" />
           <div>
             <h1 id="dashboard-title">WW14 Dashboard</h1>
             <p id="dashboard-subtitle">Lehre · Forschung · Raumklima</p>
@@ -36,8 +36,8 @@
         </div>
       </header>
 
-      <section class="dashboard-grid" aria-label="Dashboard-Inhalte">
-        <article class="panel climate-panel">
+      <section id="slide-deck" class="slide-deck" aria-label="Dashboard-Slides" aria-live="polite">
+        <article class="panel dashboard-slide climate-panel is-active" data-slide-title="Raumklima" aria-hidden="false">
           <div class="panel-heading">
             <div>
               <span class="eyebrow">Loxone · InfluxDB</span>
@@ -55,36 +55,7 @@
           </div>
         </article>
 
-        <article class="panel deadlines-panel">
-          <div class="panel-heading">
-            <div>
-              <span class="eyebrow">Publikationen</span>
-              <h2>Deadlines</h2>
-            </div>
-            <div class="panel-actions">
-              <span class="panel-count" id="deadline-count">0</span>
-              <button id="deadline-manage-button" class="panel-action" type="button" title="Deadline eintragen" aria-label="Deadline eintragen">+</button>
-            </div>
-          </div>
-          <div id="deadline-content" class="list loading-block"></div>
-        </article>
-
-        <article class="panel stocks-panel">
-          <div class="panel-heading">
-            <div>
-              <span class="eyebrow">Märkte</span>
-              <h2>Aktien</h2>
-            </div>
-            <div class="panel-actions">
-              <span id="stock-state" class="source-state">Lädt …</span>
-              <button id="stock-manage-button" class="panel-action" type="button" title="Aktien suchen und verwalten" aria-label="Aktien suchen und verwalten">+</button>
-            </div>
-          </div>
-          <div id="stock-content" class="stock-list loading-block"></div>
-          <div class="panel-footer"><span id="stock-message"></span></div>
-        </article>
-
-        <article class="panel weather-panel">
+        <article class="panel dashboard-slide weather-panel" data-slide-title="Wetter" aria-hidden="true">
           <div class="panel-heading">
             <div>
               <span class="eyebrow">Vorhersage</span>
@@ -101,53 +72,96 @@
           <div id="weather-content" class="weather-content loading-block"></div>
         </article>
 
-        <article class="panel events-panel">
+        <article class="panel dashboard-slide radar-panel" data-slide-title="Regenradar" aria-hidden="true">
           <div class="panel-heading">
             <div>
-              <span class="eyebrow">Kalender</span>
-              <h2>Wichtige Termine</h2>
+              <span class="eyebrow">DWD · nächste 2 Stunden</span>
+              <h2>Regenradar</h2>
+              <p id="radar-slide-location" class="slide-subtitle">Brandenburg an der Havel</p>
             </div>
-            <div class="panel-actions">
-              <span class="panel-count" id="event-count">0</span>
-              <button id="event-manage-button" class="panel-action" type="button" title="Termin eintragen" aria-label="Termin eintragen">+</button>
-            </div>
+            <span id="radar-slide-state" class="source-state">Lädt …</span>
           </div>
-          <div id="event-content" class="event-list loading-block"></div>
+          <div id="radar-slide-content" class="radar-slide-content loading-block"></div>
         </article>
 
-        <article class="panel todos-panel">
+        <article class="panel dashboard-slide mensa-panel" data-slide-title="Mensa" aria-hidden="true">
           <div class="panel-heading">
             <div>
-              <span class="eyebrow">Heute im Blick</span>
-              <h2>To-do</h2>
+              <span class="eyebrow">Campus · Speiseplan</span>
+              <h2>Mensa</h2>
+              <p id="mensa-date" class="slide-subtitle">Heute</p>
             </div>
-            <span class="panel-count" id="todo-count">0</span>
+            <span id="mensa-state" class="source-state">Lädt …</span>
           </div>
-          <form id="todo-form" class="todo-form">
-            <label class="sr-only" for="todo-input">Neue Aufgabe</label>
-            <input id="todo-input" maxlength="240" autocomplete="off" placeholder="Neue Aufgabe …" />
-            <button type="submit" aria-label="Aufgabe hinzufügen">+</button>
-          </form>
-          <div id="todo-content" class="todo-list loading-block"></div>
+          <div id="mensa-content" class="mensa-grid loading-block"></div>
+          <div class="panel-footer">
+            <span id="mensa-message">Speiseplan wird geladen</span>
+            <a id="mensa-source" href="https://www.imensa.de/brandenburg-an-der-havel/mensa-brandenburg-an-der-havel/montag.html" target="_blank" rel="noopener">iMensa · Studierendenwerk Westbrandenburg</a>
+          </div>
+        </article>
+
+        <article class="panel dashboard-slide stocks-panel" data-slide-title="Märkte" aria-hidden="true">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">Aktien · Kryptowährungen</span>
+              <h2>Märkte</h2>
+            </div>
+            <div class="panel-actions">
+              <span id="stock-state" class="source-state">Lädt …</span>
+              <button id="stock-manage-button" class="panel-action" type="button" title="Aktien und Kryptowährungen verwalten" aria-label="Aktien und Kryptowährungen verwalten">+</button>
+            </div>
+          </div>
+          <div id="stock-content" class="stock-list loading-block"></div>
+          <div class="panel-footer"><span id="stock-message"></span></div>
+        </article>
+
+        <article class="panel dashboard-slide planner-panel" data-slide-title="Planer" aria-hidden="true">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">Alles im Blick</span>
+              <h2>Planer</h2>
+            </div>
+          </div>
+          <div class="planner-grid">
+            <section class="planner-column">
+              <div class="planner-column-heading">
+                <div><span class="eyebrow">Publikationen</span><h3>Deadlines</h3></div>
+                <div class="panel-actions"><span class="panel-count" id="deadline-count">0</span><button id="deadline-manage-button" class="panel-action" type="button" title="Deadline eintragen" aria-label="Deadline eintragen">+</button></div>
+              </div>
+              <div id="deadline-content" class="list loading-block"></div>
+            </section>
+            <section class="planner-column">
+              <div class="planner-column-heading">
+                <div><span class="eyebrow">Kalender</span><h3>Termine</h3></div>
+                <div class="panel-actions"><span class="panel-count" id="event-count">0</span><button id="event-manage-button" class="panel-action" type="button" title="Termin eintragen" aria-label="Termin eintragen">+</button></div>
+              </div>
+              <div id="event-content" class="event-list loading-block"></div>
+            </section>
+            <section class="planner-column">
+              <div class="planner-column-heading">
+                <div><span class="eyebrow">Heute</span><h3>To-do</h3></div>
+                <span class="panel-count" id="todo-count">0</span>
+              </div>
+              <form id="todo-form" class="todo-form">
+                <label class="sr-only" for="todo-input">Neue Aufgabe</label>
+                <input id="todo-input" maxlength="240" autocomplete="off" placeholder="Neue Aufgabe …" />
+                <button type="submit" aria-label="Aufgabe hinzufügen">+</button>
+              </form>
+              <div id="todo-content" class="todo-list loading-block"></div>
+            </section>
+          </div>
         </article>
       </section>
 
-      <footer class="page-footer">
-        <span id="last-refresh">Noch nicht aktualisiert</span>
-        <span>Automatische Aktualisierung <b id="refresh-interval">–</b></span>
-      </footer>
+      <nav class="slide-nav" aria-label="Slide-Navigation">
+        <button id="slide-previous" class="slide-arrow" type="button" aria-label="Vorherige Kategorie">←</button>
+        <div id="slide-dots" class="slide-dots" role="tablist" aria-label="Kategorien"></div>
+        <button id="slide-next" class="slide-arrow" type="button" aria-label="Nächste Kategorie">→</button>
+        <button id="slide-autoplay" class="slide-autoplay" type="button" aria-label="Automatischen Wechsel pausieren">Ⅱ</button>
+        <span id="slide-status" class="slide-status">Automatik · 10 s</span>
+        <span class="refresh-meta"><span id="last-refresh">Noch nicht aktualisiert</span><span>Aktualisierung <b id="refresh-interval">–</b></span></span>
+      </nav>
     </main>
-
-    <dialog id="radar-dialog" class="radar-dialog" aria-labelledby="radar-dialog-title">
-      <div class="radar-dialog-heading">
-        <div>
-          <span class="eyebrow">DWD · nächste 2 Stunden</span>
-          <h2 id="radar-dialog-title">Regenradar Brandenburg an der Havel</h2>
-        </div>
-        <button class="dialog-close" type="button" data-close-dialog="radar-dialog" aria-label="Radar schließen">×</button>
-      </div>
-      <div id="radar-dialog-content" class="radar-dialog-content"></div>
-    </dialog>
 
     <dialog id="weather-location-dialog" class="manage-dialog">
       <div class="dialog-heading">
@@ -168,13 +182,13 @@
 
     <dialog id="stock-dialog" class="manage-dialog">
       <div class="dialog-heading">
-        <div><span class="eyebrow">Märkte</span><h2>Aktien auswählen</h2></div>
+        <div><span class="eyebrow">Märkte</span><h2>Aktien &amp; Krypto auswählen</h2></div>
         <button class="dialog-close" type="button" data-close-dialog="stock-dialog" aria-label="Schließen">×</button>
       </div>
       <form id="stock-search-form" class="manage-form">
-        <label for="stock-search-input">Unternehmen oder Börsenkürzel</label>
+        <label for="stock-search-input">Unternehmen, Kryptowährung oder Kürzel</label>
         <div class="input-row">
-          <input id="stock-search-input" maxlength="80" autocomplete="off" placeholder="z. B. Vonovia" />
+          <input id="stock-search-input" maxlength="80" autocomplete="off" placeholder="z. B. Vonovia, Bitcoin oder BTC-EUR" />
           <button type="submit">Suchen</button>
         </div>
       </form>
@@ -241,7 +255,7 @@
     </dialog>
 
     <div id="toast" class="toast" role="alert" aria-live="assertive"></div>
-    <script src="/app.js?v=20261002-3" defer></script>
+    <script src="/app.js?v=20261002-5" defer></script>
   </body>
 </html>
 

@@ -5,7 +5,10 @@ const state = {
   refreshTimer: null,
   radarTimer: null,
   radarFrames: [],
-  radarOrigin: null,
+  slideIndex: 0,
+  slideTimer: null,
+  slideIntervalMs: 10000,
+  slideAutoplay: true,
   toastTimer: null,
   selectedStocks: [],
   selectedClimateMetrics: [],
@@ -116,7 +119,7 @@ function renderClimate(climate) {
     : "";
   const target = $("#climate-content");
   const metrics = climate.metrics || [];
-  target.classList.toggle("metric-grid--dense", metrics.length >= 3);
+  target.classList.toggle("metric-grid--dense", metrics.length >= 5);
   target.classList.toggle("metric-grid--packed", metrics.length >= 7);
   target.innerHTML = metrics.length
     ? metrics.map((metric, index) => `
@@ -179,16 +182,16 @@ function renderStocks(stocks) {
       const change = Number(item.change_percent);
       const negative = change < 0;
       return `<div class="stock-row ${negative ? "negative" : ""}">
-        <div class="stock-name"><strong>${escapeHtml(item.label || item.symbol)}</strong><span>${escapeHtml(item.symbol)}</span></div>
+        <div class="stock-name"><strong>${escapeHtml(item.label || item.symbol)}</strong><span>${escapeHtml(item.symbol)} · ${item.asset_type === "crypto" ? "Krypto" : "Aktie"}</span></div>
         ${sparkline(item.points || [], `stock-${index}`)}
         <div class="stock-price">${formatNumber(item.price, 2)} ${escapeHtml(item.currency || "")}<span class="stock-change ${negative ? "negative" : ""}">${Number.isFinite(change) ? `${negative ? "" : "+"}${formatNumber(change, 2)} %` : "–"}</span></div>
       </div>`;
     }).join("")
-    : '<div class="empty">Keine Aktien ausgewählt</div>';
+    : '<div class="empty">Keine Aktien oder Kryptowährungen ausgewählt</div>';
   target.classList.remove("loading-block");
 }
 
-function radarMap(radar) {
+function radarMap(radar, location) {
   if (!radar?.frames?.length) {
     state.radarFrames = [];
     return '<div class="radar-map radar-unavailable"><span>Radar momentan nicht verfügbar</span></div>';
@@ -200,21 +203,21 @@ function radarMap(radar) {
   const latitudeRadians = latitude * Math.PI / 180;
   const tileX = ((longitude + 180) / 360) * tileCount;
   const tileY = (1 - Math.asinh(Math.tan(latitudeRadians)) / Math.PI) / 2 * tileCount;
-  const firstX = Math.floor(tileX) - 1;
+  const firstX = Math.floor(tileX) - 2;
   const firstY = Math.floor(tileY) - 1;
-  const markerX = (1 + tileX - Math.floor(tileX)) * 256;
+  const markerX = (2 + tileX - Math.floor(tileX)) * 256;
   const markerY = (1 + tileY - Math.floor(tileY)) * 256;
   const originShift = 20037508.342789244;
   const tileMeters = (originShift * 2) / tileCount;
   const bbox = [
     -originShift + firstX * tileMeters,
     originShift - (firstY + 3) * tileMeters,
-    -originShift + (firstX + 3) * tileMeters,
+    -originShift + (firstX + 5) * tileMeters,
     originShift - firstY * tileMeters,
   ].join(",");
   const tiles = [];
   for (let row = 0; row < 3; row += 1) {
-    for (let column = 0; column < 3; column += 1) {
+    for (let column = 0; column < 5; column += 1) {
       const x = (firstX + column + tileCount) % tileCount;
       const y = firstY + row;
       const baseUrl = `https://tile.openstreetmap.org/${zoom}/${x}/${y}.png`;
@@ -232,8 +235,8 @@ function radarMap(radar) {
       layers: layer,
       styles: "",
       bbox,
-      width: "512",
-      height: "512",
+      width: "1024",
+      height: "614",
       srs: "EPSG:3857",
       format: "image/png",
       transparent: "true",
@@ -244,33 +247,21 @@ function radarMap(radar) {
   const first = state.radarFrames[0];
   const firstLabel = radar.stale ? "Radar gespeichert" : "Radar jetzt";
   const liveLabel = radar.stale ? "Letzter Stand" : "2 h Vorschau";
-  return `<div class="radar-map" role="button" tabindex="0" aria-label="Regenradar groß öffnen" title="Regenradar groß öffnen">
+  return `<div class="radar-map radar-map--slide">
     <div class="radar-tile-grid" style="--radar-marker-x:${markerX.toFixed(1)}px;--radar-marker-y:${markerY.toFixed(1)}px;left:calc(50% - ${markerX.toFixed(1)}px);top:calc(50% - ${markerY.toFixed(1)}px)">${tiles.join("")}<img id="radar-frame" class="radar-frame" src="${escapeHtml(first.url)}" decoding="async" alt="Animierte Niederschlagsvorhersage" /></div>
-    <span class="radar-marker" aria-label="Brandenburg an der Havel"></span>
+    <span class="radar-marker" aria-label="${escapeHtml(location)}"></span>
     <span id="radar-time" class="radar-time">${firstLabel} · ${formatDate(first.time, { hour: "2-digit", minute: "2-digit" })}</span>
     <span class="radar-live ${radar.stale ? "stale" : ""}"><i></i> ${liveLabel}</span>
-    <span class="radar-expand-hint" aria-hidden="true">⛶</span>
     <span class="radar-attribution"><a href="https://www.dwd.de/" target="_blank" rel="noopener">DWD</a> · © OpenStreetMap</span>
   </div>`;
 }
 
-function openRadarDialog(map) {
-  const dialog = $("#radar-dialog");
-  if (!map || dialog.open) return;
-  state.radarOrigin = { parent: map.parentNode, nextSibling: map.nextSibling };
-  map.classList.add("radar-map--expanded");
-  $("#radar-dialog-content").append(map);
-  dialog.showModal();
-}
-
-function restoreRadarMap() {
-  const map = $("#radar-dialog-content .radar-map");
-  if (!map || !state.radarOrigin) return;
-  const { parent, nextSibling } = state.radarOrigin;
-  map.classList.remove("radar-map--expanded");
-  if (nextSibling?.parentNode === parent) parent.insertBefore(map, nextSibling);
-  else parent.append(map);
-  state.radarOrigin = null;
+function fitRadarMap() {
+  const map = $("#radar-slide-content .radar-map");
+  const grid = map?.querySelector(".radar-tile-grid");
+  if (!map || !grid) return;
+  const scale = Math.max(map.clientWidth / 1280, map.clientHeight / 768) * 1.03;
+  grid.style.transform = `scale(${scale})`;
 }
 
 function startRadarAnimation() {
@@ -290,6 +281,7 @@ function startRadarAnimation() {
   let index = 0;
   state.radarTimer = window.setInterval(() => {
     index = (index + 1) % state.radarFrames.length;
+    if (!$(".radar-panel").classList.contains("is-active")) return;
     const frame = state.radarFrames[index];
     image.src = frame.url;
     const offset = frame.stale
@@ -299,17 +291,23 @@ function startRadarAnimation() {
   }, 1400);
 }
 
+function renderRadarSlide(radar, location) {
+  const target = $("#radar-slide-content");
+  $("#radar-slide-location").textContent = location;
+  sourceState($("#radar-slide-state"), radar?.frames?.length ? "live" : "error");
+  target.innerHTML = radarMap(radar, location);
+  target.classList.remove("loading-block");
+  window.requestAnimationFrame(fitRadarMap);
+  startRadarAnimation();
+}
+
 function renderWeather(weather) {
-  const radarDialog = $("#radar-dialog");
-  if (radarDialog.open) radarDialog.close();
-  restoreRadarMap();
   window.clearInterval(state.radarTimer);
   state.radarTimer = null;
   state.radarFrames = [];
   sourceState($("#weather-state"), weather.status);
   const weatherLocation = weather.location || "Brandenburg an der Havel";
   $("#weather-location").textContent = weatherLocation;
-  $("#radar-dialog-title").textContent = `Regenradar ${weatherLocation}`;
   $("#weather-updated").textContent = weather.updated_at
     ? `Stand ${formatDate(weather.updated_at, { hour: "2-digit", minute: "2-digit" })}`
     : "";
@@ -332,7 +330,6 @@ function renderWeather(weather) {
             </div>
           </div>
         </div>
-        ${radarMap(weather.radar)}
       </div>
       <div class="weather-hourly" aria-label="Wetterverlauf heute">
         ${hourly.map((hour) => `<div class="weather-hour ${hour.is_current ? "current" : ""}" title="${escapeHtml(hour.label)} · ${formatNumber(hour.precipitation_probability, 0)} % Regen">
@@ -350,10 +347,44 @@ function renderWeather(weather) {
           <span class="weather-day-rain">${formatNumber(day.precipitation_probability, 0)} %</span>
         </div>`).join("")}
       </div>`;
-    startRadarAnimation();
   }
+  renderRadarSlide(weather.radar, weatherLocation);
   target.classList.remove("loading-block");
   if (weather.status === "error" && weather.message) showToast(weather.message);
+}
+
+function renderMensa(mensa) {
+  const status = $("#mensa-state");
+  sourceState(status, mensa.status);
+  if (mensa.stale) status.textContent = "Gespeichert";
+  const dayLabel = mensa.date
+    ? formatDate(mensa.date + "T12:00:00", { weekday: "long", day: "2-digit", month: "long" })
+    : mensa.weekday || "Heute";
+  $("#mensa-date").textContent = dayLabel;
+  $("#mensa-message").textContent = mensa.message || "Preise für Studierende · Angaben ohne Gewähr";
+  const source = $("#mensa-source");
+  if (/^https?:\/\//.test(mensa.source_url || "")) source.href = mensa.source_url;
+
+  const target = $("#mensa-content");
+  const items = mensa.items || [];
+  target.classList.toggle("mensa-grid--compact", items.length > 6);
+  target.innerHTML = items.length
+    ? items.slice(0, 8).map((item) => {
+      const badges = (item.badges || []).map((badge) => "<span>" + escapeHtml(badge) + "</span>").join("");
+      const calories = item.calories != null && Number.isFinite(Number(item.calories))
+        ? "<span>" + formatNumber(item.calories, 0) + " kcal</span>"
+        : "";
+      return '<article class="mensa-card">'
+        + '<div class="mensa-card-top">'
+        + '<span class="mensa-category">' + escapeHtml(item.category) + "</span>"
+        + '<strong class="mensa-price">' + escapeHtml(item.price || "Preis vor Ort") + "</strong>"
+        + "</div>"
+        + "<h3>" + escapeHtml(item.name) + "</h3>"
+        + '<div class="mensa-details">' + badges + calories + "</div>"
+        + "</article>";
+    }).join("")
+    : '<div class="empty">' + escapeHtml(mensa.message || "Für diesen Tag ist kein Speiseplan verfügbar.") + "</div>";
+  target.classList.remove("loading-block");
 }
 
 function renderTodos(items) {
@@ -383,6 +414,61 @@ async function request(path, options = {}) {
   return response.status === 204 ? null : response.json();
 }
 
+function dashboardSlides() {
+  return Array.from(document.querySelectorAll(".dashboard-slide"));
+}
+
+function scheduleSlideChange() {
+  window.clearTimeout(state.slideTimer);
+  state.slideTimer = null;
+  if (!state.slideAutoplay) return;
+  state.slideTimer = window.setTimeout(() => {
+    if (document.querySelector("dialog[open]")) {
+      scheduleSlideChange();
+      return;
+    }
+    showSlide(state.slideIndex + 1);
+  }, state.slideIntervalMs);
+}
+
+function showSlide(index) {
+  const slides = dashboardSlides();
+  if (!slides.length) return;
+  state.slideIndex = (index + slides.length) % slides.length;
+  slides.forEach((slide, slideIndex) => {
+    const active = slideIndex === state.slideIndex;
+    slide.classList.toggle("is-active", active);
+    slide.setAttribute("aria-hidden", String(!active));
+  });
+  document.querySelectorAll("[data-slide-to]").forEach((dot) => {
+    const active = Number(dot.dataset.slideTo) === state.slideIndex;
+    dot.classList.toggle("is-active", active);
+    dot.setAttribute("aria-selected", String(active));
+  });
+  if (slides[state.slideIndex].classList.contains("radar-panel")) {
+    window.requestAnimationFrame(fitRadarMap);
+  }
+  scheduleSlideChange();
+}
+
+function setSlideAutoplay(enabled, reason = "") {
+  state.slideAutoplay = enabled;
+  const button = $("#slide-autoplay");
+  button.textContent = enabled ? "Ⅱ" : "▶";
+  button.setAttribute(
+    "aria-label",
+    enabled ? "Automatischen Wechsel pausieren" : "Automatischen Wechsel fortsetzen",
+  );
+  $("#slide-status").textContent = enabled ? "Automatik · 10 s" : reason || "Automatik pausiert";
+  scheduleSlideChange();
+}
+
+function initializeSlides() {
+  const slides = dashboardSlides();
+  $("#slide-dots").innerHTML = slides.map((slide, index) => `<button type="button" role="tab" data-slide-to="${index}" aria-label="${escapeHtml(slide.dataset.slideTitle)}" title="${escapeHtml(slide.dataset.slideTitle)}"></button>`).join("");
+  showSlide(0);
+}
+
 async function loadDashboard() {
   window.clearTimeout(state.refreshTimer);
   try {
@@ -399,6 +485,7 @@ async function loadDashboard() {
     renderEvents(data.events);
     renderStocks(data.stocks);
     renderWeather(data.weather || { status: "disabled", daily: [] });
+    renderMensa(data.mensa || { status: "disabled", items: [] });
     renderTodos(data.todos);
     const connection = $("#connection");
     connection.className = "connection online";
@@ -419,7 +506,7 @@ function renderStockSelections(items) {
   const target = $("#stock-selected");
   target.innerHTML = items.length
     ? items.map((item) => `<div class="manage-selection">
-      <div class="manage-copy"><strong>${escapeHtml(item.label || item.symbol)}</strong><span>${escapeHtml(item.symbol)}</span></div>
+      <div class="manage-copy"><strong>${escapeHtml(item.label || item.symbol)}</strong><span>${escapeHtml(item.symbol)} · ${item.asset_type === "crypto" ? "Krypto" : "Aktie"}</span></div>
       <button class="remove-selection" type="button" data-remove-stock="${escapeHtml(item.symbol)}" aria-label="${escapeHtml(item.label || item.symbol)} entfernen">×</button>
     </div>`).join("")
     : '<div class="manage-message">Noch keine Aktie ausgewählt.</div>';
@@ -552,7 +639,7 @@ $("#weather-location-search-results").addEventListener("click", async (event) =>
 
 $("#stock-manage-button").addEventListener("click", async () => {
   $("#stock-dialog").showModal();
-  $("#stock-search-results").innerHTML = '<div class="manage-message">Nach Unternehmen oder Börsenkürzel suchen.</div>';
+  $("#stock-search-results").innerHTML = '<div class="manage-message">Nach Aktie, Kryptowährung oder Kürzel suchen.</div>';
   try {
     await refreshStockSelections();
     $("#stock-search-input").focus();
@@ -573,11 +660,11 @@ $("#stock-search-form").addEventListener("submit", async (event) => {
   try {
     const items = await request(`/api/stocks/search?q=${encodeURIComponent(query)}`);
     target.innerHTML = items.length
-      ? items.map((item) => `<button class="manage-result" type="button" data-add-stock="${escapeHtml(item.symbol)}" data-stock-label="${escapeHtml(item.label)}">
-        <span class="manage-copy"><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.symbol)}${item.exchange ? ` · ${escapeHtml(item.exchange)}` : ""}</span></span>
+      ? items.map((item) => `<button class="manage-result" type="button" data-add-stock="${escapeHtml(item.symbol)}" data-stock-label="${escapeHtml(item.label)}" data-stock-type="${escapeHtml(item.asset_type || "stock")}">
+        <span class="manage-copy"><strong>${escapeHtml(item.label)}</strong><span>${item.asset_type === "crypto" ? "Krypto" : "Aktie"} · ${escapeHtml(item.symbol)}${item.exchange ? ` · ${escapeHtml(item.exchange)}` : ""}</span></span>
         <span>Hinzufügen</span>
       </button>`).join("")
-      : '<div class="manage-message">Keine passende Aktie gefunden.</div>';
+      : '<div class="manage-message">Keine passende Aktie oder Kryptowährung gefunden.</div>';
   } catch (error) {
     target.innerHTML = `<div class="manage-message">${escapeHtml(error.message)}</div>`;
   } finally {
@@ -592,7 +679,11 @@ $("#stock-search-results").addEventListener("click", async (event) => {
   try {
     await request("/api/stocks", {
       method: "POST",
-      body: JSON.stringify({ symbol: button.dataset.addStock, label: button.dataset.stockLabel }),
+      body: JSON.stringify({
+        symbol: button.dataset.addStock,
+        label: button.dataset.stockLabel,
+        asset_type: button.dataset.stockType || "stock",
+      }),
     });
     await refreshStockSelections();
     await loadDashboard();
@@ -785,22 +876,31 @@ document.querySelectorAll("dialog").forEach((dialog) => {
   });
 });
 
-$("#radar-dialog").addEventListener("close", restoreRadarMap);
-
-$("#weather-content").addEventListener("click", (event) => {
-  if (event.target.closest("a")) return;
-  const map = event.target.closest(".radar-map:not(.radar-unavailable)");
-  if (map) openRadarDialog(map);
+$("#slide-previous").addEventListener("click", () => showSlide(state.slideIndex - 1));
+$("#slide-next").addEventListener("click", () => showSlide(state.slideIndex + 1));
+$("#slide-dots").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-slide-to]");
+  if (button) showSlide(Number(button.dataset.slideTo));
+});
+$("#slide-autoplay").addEventListener("click", () => {
+  setSlideAutoplay(!state.slideAutoplay);
 });
 
-$("#weather-content").addEventListener("keydown", (event) => {
-  if (event.target.closest("a")) return;
-  if (!['Enter', ' '].includes(event.key)) return;
-  const map = event.target.closest(".radar-map:not(.radar-unavailable)");
-  if (!map) return;
-  event.preventDefault();
-  openRadarDialog(map);
+document.addEventListener("keydown", (event) => {
+  if (document.querySelector("dialog[open]") || event.target.matches("input, textarea, select")) return;
+  if (event.key === "ArrowRight") {
+    event.preventDefault();
+    showSlide(state.slideIndex + 1);
+  } else if (event.key === "ArrowLeft") {
+    event.preventDefault();
+    showSlide(state.slideIndex - 1);
+  }
 });
+
+window.addEventListener("mousemove", () => {
+  if (state.slideAutoplay) setSlideAutoplay(false, "Maus erkannt · pausiert");
+}, { passive: true });
+window.addEventListener("resize", () => window.requestAnimationFrame(fitRadarMap));
 
 $("#todo-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -857,5 +957,6 @@ $("#fullscreen-button").addEventListener("click", async () => {
 window.addEventListener("online", loadDashboard);
 setInterval(updateClock, 1000);
 updateClock();
+initializeSlides();
 loadDashboard();
 

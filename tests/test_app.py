@@ -8,7 +8,14 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.sources import AsyncTTLCache, _weather_description, get_weather
+from app.sources import (
+    AsyncTTLCache,
+    _parse_mensa_menu,
+    _quote_in_euro,
+    _weather_description,
+    get_stocks,
+    get_weather,
+)
 
 
 def make_config(tmp_path: Path) -> Path:
@@ -68,6 +75,7 @@ def test_health_and_dashboard(tmp_path: Path) -> None:
     assert dashboard.json()["settings"]["title"] == "Test Dashboard"
     assert dashboard.json()["climate"]["status"] == "demo"
     assert dashboard.json()["weather"]["status"] == "disabled"
+    assert dashboard.json()["mensa"]["status"] == "disabled"
     assert dashboard.json()["deadlines"]["items"][0]["title"] == "Test deadline"
 
 
@@ -105,9 +113,123 @@ def test_stock_selection_lifecycle(tmp_path: Path) -> None:
 
     assert created.status_code == 201
     assert listed.json() == [
-        {"symbol": "VNA.DE", "label": "Vonovia", "currency": ""}
+        {
+            "symbol": "VNA.DE",
+            "label": "Vonovia",
+            "currency": "",
+            "asset_type": "stock",
+        }
     ]
     assert deleted.status_code == 204
+
+
+def test_crypto_selection_is_persisted(tmp_path: Path) -> None:
+    app = create_app(make_config(tmp_path))
+    with TestClient(app) as client:
+        created = client.post(
+            "/api/stocks",
+            json={
+                "symbol": "BTC-EUR",
+                "label": "Bitcoin EUR",
+                "asset_type": "crypto",
+            },
+        )
+        listed = client.get("/api/stocks")
+
+    assert created.status_code == 201
+    assert listed.json()[0]["asset_type"] == "crypto"
+
+
+def test_market_quote_is_converted_to_euro(monkeypatch) -> None:
+    async def fake_fetch(symbol: str):
+        assert symbol == "USDEUR=X"
+        return {"price": 0.8}
+
+    monkeypatch.setattr("app.sources._fetch_yahoo_stock", fake_fetch)
+    result = asyncio.run(
+        _quote_in_euro(
+            {
+                "price": 100.0,
+                "previous_close": 90.0,
+                "currency": "USD",
+                "points": [90.0, 100.0],
+            }
+        )
+    )
+
+    assert result["currency"] == "EUR"
+    assert result["original_currency"] == "USD"
+    assert result["price"] == 80.0
+    assert result["previous_close"] == 72.0
+    assert result["points"] == [72.0, 80.0]
+
+
+def test_live_stock_collection_converts_without_cache_deadlock(monkeypatch) -> None:
+    async def fake_fetch(symbol: str):
+        if symbol == "ZZZEUR=X":
+            return {"price": 0.5}
+        assert symbol == "TEST-ZZZ"
+        return {
+            "price": 20.0,
+            "previous_close": 18.0,
+            "change_percent": 11.11,
+            "currency": "ZZZ",
+            "points": [18.0, 20.0],
+        }
+
+    monkeypatch.setattr("app.sources._fetch_yahoo_stock", fake_fetch)
+    result = asyncio.run(
+        asyncio.wait_for(
+            get_stocks(
+                {
+                    "stocks": {
+                        "enabled": True,
+                        "provider": "yahoo",
+                        "symbols": [
+                            {
+                                "symbol": "TEST-ZZZ",
+                                "label": "Testwert",
+                                "asset_type": "stock",
+                            }
+                        ],
+                    }
+                }
+            ),
+            timeout=1,
+        )
+    )
+
+    assert result["status"] == "live"
+    assert result["items"][0]["price"] == 10.0
+    assert result["items"][0]["currency"] == "EUR"
+
+
+def test_mensa_menu_parser_extracts_meals() -> None:
+    content = """
+    <html><body>
+      <h3>So schmeckt's den Nutzern der App:</h3><p>3,7 Sterne</p>
+      <h3>Angebot 1</h3>
+      <p>Spaghetti aglio e olio mit Kirschtomaten</p>
+      <p>Knoblauch vegan ZUSATZ geschwefelt NÄHRWERT 3661 kJ 875 kcal</p>
+      <p>2,15 €</p>
+      <h3>Angebot 2</h3>
+      <p>Chili con Quinoa mit Guacamole</p>
+      <p>vegan NÄHRWERT 442 kcal</p>
+      <p>2,95 €</p>
+      <h2>Speiseplan</h2>
+    </body></html>
+    """
+
+    items = _parse_mensa_menu(content)
+
+    assert len(items) == 2
+    assert items[0] == {
+        "category": "Angebot 1",
+        "name": "Spaghetti aglio e olio mit Kirschtomaten",
+        "price": "2,15 €",
+        "calories": 875,
+        "badges": ["Vegan"],
+    }
 
 
 def test_climate_metric_selection_lifecycle(tmp_path: Path) -> None:
