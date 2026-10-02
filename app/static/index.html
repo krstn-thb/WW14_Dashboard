@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#071311" />
     <title>WW14 Dashboard</title>
-    <link rel="stylesheet" href="/styles.css?v=20261002-2" />
+    <link rel="stylesheet" href="/styles.css?v=20261002-3" />
   </head>
   <body>
     <div class="ambient ambient-one" aria-hidden="true"></div>
@@ -89,14 +89,16 @@
             <div>
               <span class="eyebrow">Vorhersage</span>
               <h2>Wetter</h2>
+              <p class="weather-panel-meta"><span id="weather-location">Brandenburg an der Havel</span><span id="weather-updated"></span></p>
             </div>
-            <span id="weather-state" class="source-state">Lädt …</span>
+            <div class="panel-actions">
+              <span id="weather-state" class="source-state">Lädt …</span>
+              <button id="weather-location-button" class="panel-action" type="button" title="Wetterort auswählen" aria-label="Wetterort auswählen">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s6-5.2 6-11a6 6 0 1 0-12 0c0 5.8 6 11 6 11Z"/><circle cx="12" cy="10" r="2"/></svg>
+              </button>
+            </div>
           </div>
           <div id="weather-content" class="weather-content loading-block"></div>
-          <div class="panel-footer">
-            <span id="weather-location">Brandenburg an der Havel</span>
-            <span id="weather-updated"></span>
-          </div>
         </article>
 
         <article class="panel events-panel">
@@ -145,6 +147,23 @@
         <button class="dialog-close" type="button" data-close-dialog="radar-dialog" aria-label="Radar schließen">×</button>
       </div>
       <div id="radar-dialog-content" class="radar-dialog-content"></div>
+    </dialog>
+
+    <dialog id="weather-location-dialog" class="manage-dialog">
+      <div class="dialog-heading">
+        <div><span class="eyebrow">Vorhersage</span><h2>Wetterort auswählen</h2></div>
+        <button class="dialog-close" type="button" data-close-dialog="weather-location-dialog" aria-label="Schließen">×</button>
+      </div>
+      <form id="weather-location-search-form" class="manage-form">
+        <label for="weather-location-search-input">Ort oder Postleitzahl</label>
+        <div class="input-row">
+          <input id="weather-location-search-input" maxlength="80" autocomplete="off" placeholder="z. B. Potsdam oder 14467" />
+          <button type="submit">Suchen</button>
+        </div>
+      </form>
+      <div id="weather-location-search-results" class="manage-results"></div>
+      <h3>Aktueller Wetterort</h3>
+      <div id="weather-location-current" class="manage-selected"></div>
     </dialog>
 
     <dialog id="stock-dialog" class="manage-dialog">
@@ -222,7 +241,7 @@
     </dialog>
 
     <div id="toast" class="toast" role="alert" aria-live="assertive"></div>
-    <script src="/app.js?v=20261002-2" defer></script>
+    <script src="/app.js?v=20261002-3" defer></script>
   </body>
 </html>
 

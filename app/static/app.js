@@ -11,6 +11,7 @@ const state = {
   selectedClimateMetrics: [],
   selectedDeadlines: [],
   selectedEvents: [],
+  weatherLocationResults: [],
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -306,7 +307,9 @@ function renderWeather(weather) {
   state.radarTimer = null;
   state.radarFrames = [];
   sourceState($("#weather-state"), weather.status);
-  $("#weather-location").textContent = weather.location || "Brandenburg an der Havel";
+  const weatherLocation = weather.location || "Brandenburg an der Havel";
+  $("#weather-location").textContent = weatherLocation;
+  $("#radar-dialog-title").textContent = `Regenradar ${weatherLocation}`;
   $("#weather-updated").textContent = weather.updated_at
     ? `Stand ${formatDate(weather.updated_at, { hour: "2-digit", minute: "2-digit" })}`
     : "";
@@ -481,6 +484,71 @@ function renderEventSelections(items) {
 async function refreshEventSelections() {
   renderEventSelections(await request("/api/events"));
 }
+
+function renderCurrentWeatherLocation(location) {
+  $("#weather-location-current").innerHTML = `<div class="manage-selection">
+    <div class="manage-copy"><strong>${escapeHtml(location.name)}</strong><span>${escapeHtml(location.label || location.name)}</span></div>
+  </div>`;
+}
+
+async function refreshCurrentWeatherLocation() {
+  renderCurrentWeatherLocation(await request("/api/weather/location"));
+}
+
+$("#weather-location-button").addEventListener("click", async () => {
+  $("#weather-location-dialog").showModal();
+  $("#weather-location-search-results").innerHTML = '<div class="manage-message">Nach einem Ort oder einer Postleitzahl suchen.</div>';
+  try {
+    await refreshCurrentWeatherLocation();
+    $("#weather-location-search-input").focus();
+  } catch (error) {
+    showToast(error.message);
+  }
+});
+
+$("#weather-location-search-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const input = $("#weather-location-search-input");
+  const query = input.value.trim();
+  if (query.length < 2) return;
+  const button = event.currentTarget.querySelector("button");
+  const target = $("#weather-location-search-results");
+  button.disabled = true;
+  target.innerHTML = '<div class="manage-message">Ortssuche läuft …</div>';
+  try {
+    state.weatherLocationResults = await request(`/api/weather/locations/search?q=${encodeURIComponent(query)}`);
+    target.innerHTML = state.weatherLocationResults.length
+      ? state.weatherLocationResults.map((item, index) => `<button class="manage-result" type="button" data-weather-location-index="${index}">
+        <span class="manage-copy"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.label)}</span></span>
+        <span>Auswählen</span>
+      </button>`).join("")
+      : '<div class="manage-message">Kein passender Ort gefunden.</div>';
+  } catch (error) {
+    target.innerHTML = `<div class="manage-message">${escapeHtml(error.message)}</div>`;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+$("#weather-location-search-results").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-weather-location-index]");
+  if (!button) return;
+  const location = state.weatherLocationResults[Number(button.dataset.weatherLocationIndex)];
+  if (!location) return;
+  button.disabled = true;
+  try {
+    await request("/api/weather/location", {
+      method: "PUT",
+      body: JSON.stringify(location),
+    });
+    $("#weather-location-dialog").close();
+    await loadDashboard();
+    showToast(`Wetterort wurde auf ${location.name} geändert.`);
+  } catch (error) {
+    showToast(error.message);
+    button.disabled = false;
+  }
+});
 
 $("#stock-manage-button").addEventListener("click", async () => {
   $("#stock-dialog").showModal();

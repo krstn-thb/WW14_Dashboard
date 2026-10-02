@@ -89,6 +89,31 @@ class TodoStore:
         connection.row_factory = sqlite3.Row
         return connection
 
+    def get_weather_location(self) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT value FROM app_meta WHERE key = 'weather_location'"
+            ).fetchone()
+        if not row:
+            return None
+        try:
+            value = json.loads(row["value"])
+        except (TypeError, json.JSONDecodeError):
+            return None
+        return value if isinstance(value, dict) else None
+
+    def set_weather_location(self, location: dict[str, Any]) -> dict[str, Any]:
+        value = json.dumps(location, ensure_ascii=False, sort_keys=True)
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO app_meta (key, value) VALUES ('weather_location', ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                (value,),
+            )
+        return location
+
     @staticmethod
     def _as_dict(row: sqlite3.Row) -> dict[str, Any]:
         return {

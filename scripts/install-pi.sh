@@ -7,6 +7,15 @@ VENV_DIR="$PROJECT_DIR/.venv"
 echo "WW14 Dashboard wird in $PROJECT_DIR eingerichtet."
 chmod +x "$PROJECT_DIR/scripts/start-kiosk.sh"
 
+if ! dpkg-query -W -f='${Status}' fonts-noto-color-emoji 2>/dev/null | grep -q "install ok installed"; then
+  echo "Emoji-Schrift für Wetter- und Statussymbole wird installiert."
+  sudo apt-get update
+  sudo apt-get install -y fonts-noto-color-emoji
+fi
+if command -v fc-cache >/dev/null 2>&1; then
+  fc-cache -f >/dev/null
+fi
+
 if ! command -v python3 >/dev/null 2>&1; then
   echo "Python 3 fehlt. Es wird über apt installiert."
   sudo apt-get update

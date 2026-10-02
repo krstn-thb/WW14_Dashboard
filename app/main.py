@@ -22,6 +22,7 @@ from app.sources import (
     get_stocks,
     get_weather,
     search_stocks,
+    search_weather_locations,
 )
 from app.store import TodoStore
 
@@ -63,6 +64,16 @@ class EventCreate(BaseModel):
     location: str = Field(default="", max_length=160)
 
 
+class WeatherLocationUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=160)
+    label: str = Field(default="", max_length=320)
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    timezone: str = Field(default="auto", min_length=1, max_length=80)
+    admin1: str = Field(default="", max_length=160)
+    country: str = Field(default="", max_length=160)
+
+
 def _metric_defaults(field: str) -> tuple[str, str, int]:
     lowered = field.lower()
     if any(word in lowered for word in ("temperatur", "temperature", "temp")):
@@ -98,6 +109,20 @@ def _timezone(config: dict[str, Any]) -> ZoneInfo:
         return ZoneInfo(config.get("dashboard", {}).get("timezone", "Europe/Berlin"))
     except ZoneInfoNotFoundError:
         return ZoneInfo("UTC")
+
+
+def _configured_weather_location(config: dict[str, Any]) -> dict[str, Any]:
+    weather = config.get("weather", {})
+    name = str(weather.get("location", "Brandenburg an der Havel"))
+    return {
+        "name": name,
+        "label": name,
+        "latitude": float(weather.get("latitude", 52.4125)),
+        "longitude": float(weather.get("longitude", 12.5316)),
+        "timezone": str(weather.get("timezone", "Europe/Berlin")),
+        "admin1": "",
+        "country": "",
+    }
 
 
 def _seed_items(
@@ -170,12 +195,14 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
             manual_deadlines,
             manual_events,
             todos,
+            weather_location,
         ) = await asyncio.gather(
             asyncio.to_thread(store.list_stocks),
             asyncio.to_thread(store.list_climate_metrics),
             asyncio.to_thread(store.list_deadlines),
             asyncio.to_thread(store.list_events),
             asyncio.to_thread(store.list),
+            asyncio.to_thread(store.get_weather_location),
         )
         source_config = copy.deepcopy(config)
         source_config.setdefault("stocks", {})["symbols"] = selected_stocks
@@ -184,6 +211,15 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
         source_config["deadlines"]["json_feeds"] = []
         source_config.setdefault("events", {})["items"] = manual_events
         source_config["events"]["ical"] = []
+        if weather_location:
+            source_config.setdefault("weather", {}).update(
+                {
+                    "location": weather_location["name"],
+                    "latitude": weather_location["latitude"],
+                    "longitude": weather_location["longitude"],
+                    "timezone": weather_location["timezone"],
+                }
+            )
         climate, deadlines, events, stocks, weather = await asyncio.gather(
             get_climate(source_config),
             get_deadlines(source_config, timezone),
@@ -213,6 +249,37 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
     @application.get("/api/stocks")
     async def list_stocks() -> list[dict[str, Any]]:
         return await asyncio.to_thread(store.list_stocks)
+
+    @application.get("/api/weather/location")
+    async def get_weather_location() -> dict[str, Any]:
+        selected = await asyncio.to_thread(store.get_weather_location)
+        return selected or _configured_weather_location(config)
+
+    @application.get("/api/weather/locations/search")
+    async def find_weather_locations(
+        q: str = Query(min_length=2, max_length=80),
+    ) -> list[dict[str, Any]]:
+        try:
+            return await search_weather_locations(q.strip())
+        except Exception as exc:
+            raise HTTPException(
+                status_code=502, detail=f"Ortssuche nicht erreichbar: {exc}"
+            ) from exc
+
+    @application.put("/api/weather/location")
+    async def update_weather_location(
+        payload: WeatherLocationUpdate,
+    ) -> dict[str, Any]:
+        location = {
+            "name": payload.name.strip(),
+            "label": payload.label.strip() or payload.name.strip(),
+            "latitude": payload.latitude,
+            "longitude": payload.longitude,
+            "timezone": payload.timezone.strip() or "auto",
+            "admin1": payload.admin1.strip(),
+            "country": payload.country.strip(),
+        }
+        return await asyncio.to_thread(store.set_weather_location, location)
 
     @application.get("/api/stocks/search")
     async def find_stocks(

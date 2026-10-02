@@ -726,12 +726,56 @@ async def _get_radar(section: dict[str, Any]) -> dict[str, Any] | None:
         return None
 
 
+async def search_weather_locations(query: str) -> list[dict[str, Any]]:
+    async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+        response = await client.get(
+            "https://geocoding-api.open-meteo.com/v1/search",
+            params={
+                "name": query,
+                "count": 8,
+                "language": "de",
+                "format": "json",
+            },
+        )
+        response.raise_for_status()
+        payload = response.json()
+
+    locations: list[dict[str, Any]] = []
+    for item in payload.get("results", []):
+        try:
+            latitude = float(item["latitude"])
+            longitude = float(item["longitude"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        name = str(item.get("name", "")).strip()
+        if not name:
+            continue
+        label_parts = []
+        for value in (name, item.get("admin1"), item.get("country")):
+            part = str(value or "").strip()
+            if part and part not in label_parts:
+                label_parts.append(part)
+        locations.append(
+            {
+                "name": name,
+                "label": ", ".join(label_parts),
+                "latitude": latitude,
+                "longitude": longitude,
+                "timezone": str(item.get("timezone") or "auto"),
+                "admin1": str(item.get("admin1") or ""),
+                "country": str(item.get("country") or ""),
+            }
+        )
+    return locations
+
+
 async def get_weather(config: dict[str, Any]) -> dict[str, Any]:
     section = config.get("weather", {})
     if not section.get("enabled", False):
         return {
             "status": "disabled",
             "location": section.get("location", ""),
+            "timezone": section.get("timezone", "auto"),
             "hourly": [],
             "daily": [],
         }
@@ -811,6 +855,7 @@ async def get_weather(config: dict[str, Any]) -> dict[str, Any]:
         return {
             "status": "live",
             "location": section.get("location", "Brandenburg an der Havel"),
+            "timezone": section.get("timezone", "auto"),
             "current": {
                 "temperature": current.get("temperature_2m"),
                 "apparent_temperature": current.get("apparent_temperature"),
@@ -837,6 +882,7 @@ async def get_weather(config: dict[str, Any]) -> dict[str, Any]:
         return {
             "status": "error",
             "location": section.get("location", "Brandenburg an der Havel"),
+            "timezone": section.get("timezone", "auto"),
             "message": f"Wettervorhersage nicht erreichbar: {exc}",
             "hourly": [],
             "daily": [],

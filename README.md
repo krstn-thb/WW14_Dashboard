@@ -11,7 +11,7 @@ Das Projekt ist bewusst schlank aufgebaut: Ein Python-Dienst liefert Daten und O
 - Loxone-/InfluxDB-Messwerte mit 24-Stunden-Verlauf
 - Auswahl vorhandener InfluxDB-Messfelder direkt im Dashboard
 - Deadlines und wichtige Termine direkt im Dashboard eintragen und löschen
-- Wetter für Brandenburg an der Havel mit Tagesverlauf und animierter DWD-Regenvorschau für die nächsten zwei Stunden
+- frei wählbarer Wetterort mit Tagesverlauf und animierter DWD-Regenvorschau für die nächsten zwei Stunden
 - Aktienkurse mit Suche, Hinzufügen und Entfernen im Dashboard
 - persistente To-do-Liste in SQLite
 - Offline-Anzeige und Fehlerisolierung je Datenquelle
@@ -48,7 +48,7 @@ cd WW14_Dashboard
 bash scripts/install-pi.sh
 ```
 
-Das Skript richtet eine eigene Python-Umgebung ein, startet den Dienst automatisch und legt den Chromium-Autostart für den Vollbildmodus an. Nach dem nächsten grafischen Login erscheint das Dashboard automatisch. Es ist zusätzlich im lokalen Netz unter `http://IP-DES-PI:8080` erreichbar.
+Das Skript installiert außerdem die Emoji-Schrift für Wetter- und Statussymbole, richtet eine eigene Python-Umgebung ein, startet den Dienst automatisch und legt den Chromium-Autostart für den Vollbildmodus an. Nach dem nächsten grafischen Login erscheint das Dashboard automatisch. Es ist zusätzlich im lokalen Netz unter `http://IP-DES-PI:8080` erreichbar.
 
 Der Vollbildmodus lässt sich mit `F11` verlassen. `Alt` + `F4` schließt Chromium vollständig.
 
@@ -128,7 +128,7 @@ Die Yahoo-Schnittstelle ist nicht vertraglich garantiert. Für einen dauerhaften
 
 ### Wetter und Regenradar
 
-Die Vorhersage für Brandenburg an der Havel wird ohne API-Schlüssel von [Open-Meteo](https://open-meteo.com/) geladen. Sie enthält den Tagesverlauf in Drei-Stunden-Schritten. Ort, Koordinaten und Anzahl der Vorhersagetage stehen unter `weather` in `config/dashboard.yaml`.
+Die Vorhersage wird ohne API-Schlüssel von [Open-Meteo](https://open-meteo.com/) geladen und enthält den Tagesverlauf in Drei-Stunden-Schritten. Über das Standort-Symbol im Wetterfeld kann nach einem Ort oder einer Postleitzahl gesucht werden. Die Auswahl wird dauerhaft in `data/dashboard.db` gespeichert. Der Ausgangsort, die Koordinaten und die Anzahl der Vorhersagetage stehen weiterhin unter `weather` in `config/dashboard.yaml`.
 
 Das Regenradar nutzt das amtliche RADVOR-Produkt des Deutschen Wetterdienstes und spielt die verfügbaren Vorhersagebilder automatisch ab. Der grüne Punkt markiert Brandenburg an der Havel; das Zeitfeld wechselt von **jetzt** bis ungefähr **+120 min**. Bei einem vorübergehenden DWD-Aussetzer bleibt die letzte erfolgreiche Animation bis zu sechs Stunden sichtbar; alle zwei Minuten wird ein neuer Abruf versucht. Damit die Karte auf dem Raspberry Pi erscheint, muss Chromium ausgehend auf `api.open-meteo.com`, `maps.dwd.de` und `tile.openstreetmap.org` zugreifen können.
 

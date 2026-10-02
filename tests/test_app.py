@@ -308,3 +308,50 @@ def test_weather_descriptions_include_symbols() -> None:
     assert _weather_description(3) == ("Bedeckt", "☁️")
     assert _weather_description(95) == ("Gewitter", "⛈️")
 
+
+def test_weather_location_is_persisted_and_used(tmp_path: Path) -> None:
+    app = create_app(make_config(tmp_path))
+    location = {
+        "name": "Potsdam",
+        "label": "Potsdam, Brandenburg, Deutschland",
+        "latitude": 52.39886,
+        "longitude": 13.06566,
+        "timezone": "Europe/Berlin",
+        "admin1": "Brandenburg",
+        "country": "Deutschland",
+    }
+    with TestClient(app) as client:
+        default_location = client.get("/api/weather/location")
+        updated = client.put("/api/weather/location", json=location)
+        selected = client.get("/api/weather/location")
+        dashboard = client.get("/api/dashboard")
+
+    assert default_location.json()["name"] == "Brandenburg an der Havel"
+    assert updated.status_code == 200
+    assert selected.json() == location
+    assert dashboard.json()["weather"]["location"] == "Potsdam"
+
+
+def test_weather_location_search(monkeypatch, tmp_path: Path) -> None:
+    async def fake_search(query: str):
+        assert query == "Potsdam"
+        return [
+            {
+                "name": "Potsdam",
+                "label": "Potsdam, Brandenburg, Deutschland",
+                "latitude": 52.39886,
+                "longitude": 13.06566,
+                "timezone": "Europe/Berlin",
+                "admin1": "Brandenburg",
+                "country": "Deutschland",
+            }
+        ]
+
+    monkeypatch.setattr("app.main.search_weather_locations", fake_search)
+    app = create_app(make_config(tmp_path))
+    with TestClient(app) as client:
+        response = client.get("/api/weather/locations/search?q=Potsdam")
+
+    assert response.status_code == 200
+    assert response.json()[0]["name"] == "Potsdam"
+

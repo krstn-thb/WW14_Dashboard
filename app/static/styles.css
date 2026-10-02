@@ -118,9 +118,11 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
 .panel-actions { display: flex; align-items: center; gap: 7px; }
 .panel-action {
   width: 28px; height: 28px; border: 1px solid rgba(127, 225, 181, .18); border-radius: 50%;
+  display: grid; place-items: center; padding: 0;
   background: rgba(127, 225, 181, .09); color: var(--green); cursor: pointer; font-size: 18px; line-height: 1;
 }
 .panel-action:hover { background: rgba(127, 225, 181, .18); }
+.panel-action svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
 .metric-grid { flex: 1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 12px; }
 .metric {
@@ -192,7 +194,13 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
 .stock-row .sparkline polyline { stroke: var(--blue); }
 .stock-row.negative .sparkline polyline { stroke: var(--red); }
 
-.weather-content { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 9px; }
+.weather-panel .panel-heading > div:first-child { min-width: 0; }
+.weather-panel-meta { display: flex; min-width: 0; gap: 7px; margin-top: 4px; color: var(--muted); font-size: 10.5px; }
+.weather-panel-meta span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.weather-panel-meta span:first-child { flex: 1; }
+.weather-panel-meta span + span { flex: none; }
+.weather-panel-meta span + span::before { content: "· "; }
+.weather-content { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; gap: 9px; }
 .weather-top { min-height: 94px; display: grid; grid-template-columns: minmax(0, .9fr) minmax(150px, 1.1fr); gap: 10px; }
 .weather-current { min-width: 0; display: flex; align-items: center; gap: 12px; }
 .weather-current-icon { font-size: clamp(42px, 4vw, 66px); line-height: 1; }
@@ -419,6 +427,7 @@ button.manage-result:hover { border-color: rgba(131, 230, 185, .38); background:
     font-size: 16px;
   }
   .panel-action { width: 44px; height: 44px; font-size: 29px; }
+  .panel-action svg { width: 24px; height: 24px; }
 
   .metric-grid { gap: 24px; }
   .metric { min-height: 260px; padding: 32px; border-radius: 29px; }
@@ -466,6 +475,7 @@ button.manage-result:hover { border-color: rgba(131, 230, 185, .38); background:
   .stock-row .sparkline { height: 64px; }
 
   .weather-content { gap: 24px; }
+  .weather-panel-meta { gap: 11px; margin-top: 7px; font-size: 16px; }
   .weather-top { min-height: 180px; gap: 22px; }
   .weather-current { gap: 26px; }
   .weather-current-icon { font-size: 96px; }
