@@ -257,7 +257,7 @@ def test_weather_includes_todays_timeline_and_radar(monkeypatch) -> None:
     )
 
     assert result["status"] == "live"
-    assert result["current"]["icon"] == "partly-cloudy"
+    assert result["current"]["icon"] == "🌤️"
     assert len(result["hourly"]) == 8
     assert result["hourly"][3]["is_current"] is True
     assert result["radar"]["source"] == "DWD RADVOR"
@@ -303,8 +303,8 @@ def test_cache_keeps_last_good_value_during_temporary_failure() -> None:
     assert attempts == 2
 
 
-def test_weather_icons_use_local_svg_names() -> None:
-    assert _weather_description(0) == ("Klar", "clear")
-    assert _weather_description(3) == ("Bedeckt", "cloudy")
-    assert _weather_description(95) == ("Gewitter", "thunderstorm")
+def test_weather_descriptions_include_symbols() -> None:
+    assert _weather_description(0) == ("Klar", "☀️")
+    assert _weather_description(3) == ("Bedeckt", "☁️")
+    assert _weather_description(95) == ("Gewitter", "⛈️")
 

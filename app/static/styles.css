@@ -32,24 +32,6 @@ body {
 
 button, input { font: inherit; }
 button { color: inherit; }
-.weather-symbols { position: absolute; width: 0; height: 0; overflow: hidden; }
-.weather-icon {
-  display: inline-block;
-  width: 1em;
-  height: 1em;
-  overflow: visible;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.7;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.weather-icon--clear { color: #ffd27d; }
-.weather-icon--partly-cloudy { color: #c9ddd6; }
-.weather-icon--cloudy, .weather-icon--fog { color: #b2c8c1; }
-.weather-icon--drizzle, .weather-icon--rain, .weather-icon--showers { color: var(--blue); }
-.weather-icon--snow { color: #d9efff; }
-.weather-icon--thunderstorm { color: #ffd27d; }
 
 .ambient {
   display: none;

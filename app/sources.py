@@ -550,26 +550,26 @@ async def get_stocks(config: dict[str, Any]) -> dict[str, Any]:
 
 def _weather_description(code: int) -> tuple[str, str]:
     if code == 0:
-        return "Klar", "clear"
+        return "Klar", "☀️"
     if code in {1, 2}:
-        return "Leicht bewölkt", "partly-cloudy"
+        return "Leicht bewölkt", "🌤️"
     if code == 3:
-        return "Bedeckt", "cloudy"
+        return "Bedeckt", "☁️"
     if code in {45, 48}:
-        return "Nebel", "fog"
+        return "Nebel", "🌫️"
     if code in {51, 53, 55, 56, 57}:
-        return "Nieselregen", "drizzle"
+        return "Nieselregen", "🌦️"
     if code in {61, 63, 65, 66, 67}:
-        return "Regen", "rain"
+        return "Regen", "🌧️"
     if code in {71, 73, 75, 77}:
-        return "Schnee", "snow"
+        return "Schnee", "🌨️"
     if code in {80, 81, 82}:
-        return "Regenschauer", "showers"
+        return "Regenschauer", "🌦️"
     if code in {85, 86}:
-        return "Schneeschauer", "snow"
+        return "Schneeschauer", "🌨️"
     if code in {95, 96, 99}:
-        return "Gewitter", "thunderstorm"
-    return "Wechselhaft", "partly-cloudy"
+        return "Gewitter", "⛈️"
+    return "Wechselhaft", "🌥️"
 
 
 def _parse_radar_time(value: str) -> datetime | None:

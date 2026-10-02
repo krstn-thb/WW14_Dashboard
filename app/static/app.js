@@ -24,15 +24,6 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-const weatherIconNames = new Set([
-  "clear", "partly-cloudy", "cloudy", "fog", "drizzle", "rain", "showers", "snow", "thunderstorm",
-]);
-
-function weatherIcon(name) {
-  const normalized = weatherIconNames.has(name) ? name : "partly-cloudy";
-  return `<svg class="weather-icon weather-icon--${normalized}" viewBox="0 0 24 24" aria-hidden="true"><use href="#weather-${normalized}"></use></svg>`;
-}
-
 function sortedTagEntries(tags = {}) {
   return Object.entries(tags).sort(([left], [right]) => left.localeCompare(right));
 }
@@ -329,7 +320,7 @@ function renderWeather(weather) {
     target.innerHTML = `
       <div class="weather-top">
         <div class="weather-current">
-          <div class="weather-current-icon" aria-hidden="true">${weatherIcon(current.icon)}</div>
+          <div class="weather-current-icon" aria-hidden="true">${escapeHtml(current.icon)}</div>
           <div>
             <div class="weather-current-temp">${formatNumber(current.temperature, 1)}°</div>
             <div class="weather-current-copy">
@@ -343,7 +334,7 @@ function renderWeather(weather) {
       <div class="weather-hourly" aria-label="Wetterverlauf heute">
         ${hourly.map((hour) => `<div class="weather-hour ${hour.is_current ? "current" : ""}" title="${escapeHtml(hour.label)} · ${formatNumber(hour.precipitation_probability, 0)} % Regen">
           <strong>${formatDate(hour.time, { hour: "2-digit", minute: "2-digit" })}</strong>
-          <span class="weather-hour-icon" aria-hidden="true">${weatherIcon(hour.icon)}</span>
+          <span class="weather-hour-icon" aria-hidden="true">${escapeHtml(hour.icon)}</span>
           <span class="weather-hour-temp">${formatNumber(hour.temperature, 0)}°</span>
           <span class="weather-hour-rain">${formatNumber(hour.precipitation_probability, 0)} %</span>
         </div>`).join("")}
@@ -351,7 +342,7 @@ function renderWeather(weather) {
       <div class="weather-days">
         ${daily.slice(0, 5).map((day) => `<div class="weather-day" title="${escapeHtml(day.label)}">
           <strong>${formatDate(`${day.date}T12:00:00`, { weekday: "short" })}</strong>
-          <span class="weather-day-icon" aria-hidden="true">${weatherIcon(day.icon)}</span>
+          <span class="weather-day-icon" aria-hidden="true">${escapeHtml(day.icon)}</span>
           <span class="weather-day-temp">${formatNumber(day.temperature_max, 0)}° / ${formatNumber(day.temperature_min, 0)}°</span>
           <span class="weather-day-rain">${formatNumber(day.precipitation_probability, 0)} %</span>
         </div>`).join("")}
