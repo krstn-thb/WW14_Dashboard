@@ -41,6 +41,8 @@ button { color: inherit; }
 .ambient-two { width: 24rem; height: 24rem; background: #448c7e; bottom: -14rem; left: 15%; }
 
 .shell {
+  --oled-shift-x: 0px;
+  --oled-shift-y: 0px;
   width: 100%;
   min-height: 100vh;
   margin: 0 auto;
@@ -610,6 +612,13 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
 .topbar .clock strong { font-size: clamp(34px, 2.7vw, 70px); }
 .topbar .clock span { margin-top: 5px; font-size: clamp(12px, .8vw, 20px); }
 
+.topbar,
+.slide-deck,
+.slide-nav {
+  transform: translate(var(--oled-shift-x), var(--oled-shift-y));
+  transition: transform .72s cubic-bezier(.2, .8, .2, 1);
+}
+
 .slide-deck { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 .dashboard-slide {
   position: absolute;
@@ -668,7 +677,12 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
 .dashboard-slide .panel-action { width: clamp(34px, 2.2vw, 54px); height: clamp(34px, 2.2vw, 54px); font-size: clamp(21px, 1.45vw, 35px); }
 .dashboard-slide .panel-action svg { width: 55%; height: 55%; }
 
-.dashboard-slide .metric-grid { gap: clamp(10px, 1vw, 24px); }
+.dashboard-slide .metric-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(10px, 1vw, 24px);
+}
+.dashboard-slide .metric-grid.metric-grid--dense { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.dashboard-slide .metric-grid.metric-grid--packed { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .dashboard-slide .metric { min-height: 0; padding: clamp(18px, 1.4vw, 38px); border-radius: clamp(18px, 1.3vw, 32px); }
 .dashboard-slide .metric-label { font-size: clamp(16px, 1vw, 27px); }
 .dashboard-slide .metric-value { font-size: clamp(44px, 4.2vw, 108px); }
@@ -854,7 +868,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
 .stocks-panel .stock-list {
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-content: start;
   gap: clamp(10px, 1vw, 24px);
   overflow: auto;
@@ -938,19 +952,15 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
 .slide-status { min-width: 125px; font-size: clamp(11px, .7vw, 18px); }
 .refresh-meta { position: absolute; right: clamp(18px, 1.5vw, 42px); display: flex; gap: 14px; font-size: clamp(10px, .62vw, 16px); }
 
-@keyframes oled-pixel-shift {
-  0%, 100% { transform: translate(0, 0); }
-  25% { transform: translate(2px, 1px); }
-  50% { transform: translate(-1px, 2px); }
-  75% { transform: translate(1px, -1px); }
-}
-.topbar, .slide-nav { animation: oled-pixel-shift 80s steps(1, end) infinite; }
-
 @media (max-width: 1100px), (max-height: 700px) {
   .brand-logo { width: 135px; height: 52px; }
   .dashboard-slide { padding: 18px; }
   .dashboard-slide .panel-heading { margin-bottom: 12px; }
   .stocks-panel .stock-row { min-height: 90px; padding: 12px; }
+  .stocks-panel .stock-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-slide .metric-grid,
+  .dashboard-slide .metric-grid.metric-grid--dense,
+  .dashboard-slide .metric-grid.metric-grid--packed { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .planner-column { padding: 12px; }
   .mensa-card { padding: 14px; }
   .weather-panel .weather-content { grid-template-columns: minmax(280px, .72fr) minmax(0, 1.45fr); gap: 12px; }
@@ -969,12 +979,16 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
   .mensa-grid { grid-template-columns: 1fr; overflow: auto; }
   .mensa-card { min-height: 210px; }
   .stocks-panel .stock-list { grid-template-columns: 1fr; }
+  .dashboard-slide .metric-grid,
+  .dashboard-slide .metric-grid.metric-grid--dense,
+  .dashboard-slide .metric-grid.metric-grid--packed { grid-template-columns: 1fr; }
   .departures-grid { grid-template-columns: 1fr; overflow: auto; }
   .departure-direction { min-height: 420px; }
   .slide-status { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .topbar, .slide-deck, .slide-nav { transition-duration: .01ms; }
   .dashboard-slide { transition-duration: .01ms; filter: none; }
   .dashboard-slide.is-active::before { animation: none; }
 }

@@ -20,6 +20,15 @@ const state = {
   weatherLocationResults: [],
 };
 
+const oledShiftPositions = [
+  [-6, -4],
+  [5, -3],
+  [-4, 4],
+  [7, 3],
+  [1, -5],
+  [-7, 2],
+];
+
 const $ = (selector) => document.querySelector(selector);
 
 function escapeHtml(value) {
@@ -124,8 +133,8 @@ function renderClimate(climate) {
     : "";
   const target = $("#climate-content");
   const metrics = climate.metrics || [];
-  target.classList.toggle("metric-grid--dense", metrics.length >= 5);
-  target.classList.toggle("metric-grid--packed", metrics.length >= 7);
+  target.classList.toggle("metric-grid--dense", metrics.length >= 4);
+  target.classList.toggle("metric-grid--packed", metrics.length >= 9);
   target.innerHTML = metrics.length
     ? metrics.map((metric, index) => `
       <section class="metric">
@@ -505,6 +514,10 @@ function showSlide(index) {
   const movingBackward = index < state.slideIndex;
   $(".slide-deck").classList.toggle("is-backward", movingBackward);
   state.slideIndex = (index + slides.length) % slides.length;
+  const [shiftX, shiftY] = oledShiftPositions[state.slideIndex % oledShiftPositions.length];
+  const shell = $(".shell");
+  shell.style.setProperty("--oled-shift-x", `${shiftX}px`);
+  shell.style.setProperty("--oled-shift-y", `${shiftY}px`);
   slides.forEach((slide, slideIndex) => {
     const active = slideIndex === state.slideIndex;
     slide.classList.toggle("is-active", active);
