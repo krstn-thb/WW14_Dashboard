@@ -131,9 +131,9 @@ Quelle, Bahnhof und Anzahl lassen sich unter `departures` in `config/dashboard.y
 
 ### Aktien und Kryptowährungen
 
-Vonovia (`VNA.DE`) ist standardmäßig die erste Aktie. Über **+** im Märkte-Feld kann nach einem Unternehmen, einer Kryptowährung oder einem Kürzel gesucht werden. Ein Treffer wird per Klick hinzugefügt; ausgewählte Werte lassen sich im selben Fenster wieder entfernen. Kurse in anderen Währungen werden anhand des jeweils aktuellen Yahoo-Wechselkurses in Euro umgerechnet.
+Vonovia (`VNA.DE`) ist standardmäßig die erste Aktie. Über **+** im Märkte-Feld kann nach einem Unternehmen, einer Kryptowährung oder einem Kürzel gesucht werden. Ein Treffer wird per Klick hinzugefügt; ausgewählte Werte lassen sich im selben Fenster wieder entfernen.
 
-Die Yahoo-Schnittstelle ist nicht vertraglich garantiert. Für einen dauerhaften Produktivbetrieb sollte später ein offizieller Marktdatenanbieter mit API-Schlüssel ergänzt werden.
+Aktienkurse und die Wertpapiersuche kommen von **Börse Frankfurt/Xetra**, Kryptokurse und Kryptopaare von **Kraken**. Beide Quellen liefern die Anzeige direkt in Euro und benötigen keinen API-Schlüssel. Bei einem kurzen Ausfall bleibt der letzte erfolgreiche Stand bis zu sechs Stunden sichtbar. Der Raspberry Pi benötigt ausgehenden HTTPS-Zugriff auf `www.boerse-frankfurt.de`, `api.live.deutsche-boerse.com` und `api.kraken.com`.
 
 ### Mensa
 

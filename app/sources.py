@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import math
 import re
@@ -10,7 +11,7 @@ from datetime import UTC, date, datetime, time as datetime_time, timedelta
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Awaitable, Callable
-from urllib.parse import quote
+from urllib.parse import quote, urljoin
 from xml.etree import ElementTree
 from zoneinfo import ZoneInfo
 
@@ -107,9 +108,14 @@ class AsyncTTLCache:
             self._retry_after.pop(key, None)
             return value, False
 
+    def discard(self, key: str) -> None:
+        self._items.pop(key, None)
+        self._retry_after.pop(key, None)
+
 
 _cache = AsyncTTLCache()
-_currency_cache = AsyncTTLCache()
+_market_metadata_cache = AsyncTTLCache()
+_market_search_cache = AsyncTTLCache()
 
 
 def _demo_series(base: float, amplitude: float, count: int = 28) -> list[dict[str, Any]]:
@@ -627,118 +633,395 @@ async def get_departures(config: dict[str, Any]) -> dict[str, Any]:
         }
 
 
-async def _fetch_yahoo_stock(symbol: str) -> dict[str, Any]:
-    encoded = quote(symbol, safe="")
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{encoded}"
-    params = {"range": "1d", "interval": "5m", "includePrePost": "false"}
-    headers = {"User-Agent": "WW14-Dashboard/1.0"}
-    async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
-        response = await client.get(url, params=params, headers=headers)
-        response.raise_for_status()
-        payload = response.json()
-    result = payload["chart"]["result"][0]
-    meta = result["meta"]
-    closes = [
-        value
-        for value in result.get("indicators", {}).get("quote", [{}])[0].get("close", [])
-        if isinstance(value, (int, float))
-    ]
-    current = meta.get("regularMarketPrice") or (closes[-1] if closes else None)
-    previous = meta.get("chartPreviousClose") or meta.get("previousClose")
-    change_percent = (
-        ((current - previous) / previous) * 100
-        if isinstance(current, (int, float)) and isinstance(previous, (int, float)) and previous
-        else None
+_BOERSE_API = "https://api.live.deutsche-boerse.com/v1"
+_BOERSE_SITE = "https://www.boerse-frankfurt.de/"
+_KRAKEN_API = "https://api.kraken.com/0/public"
+_CRYPTO_NAMES = {
+    "AAVE": "Aave",
+    "ADA": "Cardano",
+    "AVAX": "Avalanche",
+    "BCH": "Bitcoin Cash",
+    "BTC": "Bitcoin",
+    "DOGE": "Dogecoin",
+    "DOT": "Polkadot",
+    "ETH": "Ethereum",
+    "LINK": "Chainlink",
+    "LTC": "Litecoin",
+    "SOL": "Solana",
+    "XLM": "Stellar",
+    "XRP": "XRP",
+}
+
+
+def _market_headers() -> dict[str, str]:
+    return {"User-Agent": "WW14-Dashboard/1.0", "Accept": "application/json"}
+
+
+async def _boerse_salt() -> str:
+    async def load() -> str:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+            page = await client.get(_BOERSE_SITE, headers=_market_headers())
+            page.raise_for_status()
+            scripts = re.findall(
+                r'<script[^>]+src=["\']([^"\']*main\.[^"\']+)["\']',
+                page.text,
+                flags=re.IGNORECASE,
+            )
+            if not scripts:
+                raise RuntimeError("Börse-Frankfurt-Konfiguration fehlt")
+            script = await client.get(
+                urljoin(str(page.url), scripts[-1]), headers=_market_headers()
+            )
+            script.raise_for_status()
+        match = re.search(r'tracing:\{salt:"([a-f0-9]+)"', script.text)
+        if not match:
+            raise RuntimeError("Börse-Frankfurt-Signatur fehlt")
+        return match.group(1)
+
+    return await _market_metadata_cache.get_or_load("boerse:salt", 900, load)
+
+
+def _boerse_signed_headers(url: str, salt: str) -> dict[str, str]:
+    client_date = datetime.now(UTC).isoformat(timespec="milliseconds").replace(
+        "+00:00", "Z"
     )
+    local_now = datetime.now(ZoneInfo("Europe/Berlin"))
     return {
-        "price": current,
-        "previous_close": previous,
-        "change_percent": change_percent,
-        "currency": meta.get("currency", ""),
-        "points": closes[-48:],
-        "market_state": meta.get("marketState", ""),
+        **_market_headers(),
+        "Client-Date": client_date,
+        "X-Client-TraceId": hashlib.md5(
+            f"{client_date}{url}{salt}".encode(), usedforsecurity=False
+        ).hexdigest(),
+        "X-Security": hashlib.md5(
+            local_now.strftime("%Y%m%d%H%M").encode(), usedforsecurity=False
+        ).hexdigest(),
     }
 
 
-async def _quote_in_euro(quote: dict[str, Any]) -> dict[str, Any]:
-    currency = str(quote.get("currency") or "EUR").upper()
-    if currency == "EUR":
-        return {**quote, "currency": "EUR"}
+async def _boerse_signed_get(path: str, params: dict[str, Any]) -> Any:
+    url = str(httpx.URL(f"{_BOERSE_API}/{path.lstrip('/')}", params=params))
+    for attempt in range(2):
+        salt = await _boerse_salt()
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+            response = await client.get(url, headers=_boerse_signed_headers(url, salt))
+        if response.status_code not in {401, 403} or attempt:
+            response.raise_for_status()
+            return response.json()
+        _market_metadata_cache.discard("boerse:salt")
+    raise RuntimeError("Börse Frankfurt hat den Abruf abgelehnt")
 
-    async def load_rate() -> float:
-        rate_quote = await _fetch_yahoo_stock(f"{currency}EUR=X")
-        rate = rate_quote.get("price")
-        if not isinstance(rate, (int, float)) or rate <= 0:
-            raise ValueError(f"Kein EUR-Wechselkurs für {currency}")
-        return float(rate)
 
-    # Keep exchange rates in a separate cache. Stock lists are themselves loaded
-    # through _cache, so reusing that lock here would deadlock for non-EUR quotes.
-    rate, _ = await _currency_cache.get_or_load_with_stale(
-        f"currency:{currency}:EUR",
-        3600,
-        86400,
-        300,
-        load_rate,
+def _translated_market_name(value: Any) -> str:
+    if not isinstance(value, dict):
+        return str(value or "")
+    translations = value.get("translations") or {}
+    return str(
+        translations.get("others")
+        or translations.get("de")
+        or value.get("originalValue")
+        or ""
     )
 
-    converted = {**quote, "currency": "EUR", "original_currency": currency}
-    for key in ("price", "previous_close"):
-        value = quote.get(key)
-        if isinstance(value, (int, float)):
-            converted[key] = value * rate
-    converted["points"] = [
-        value * rate if isinstance(value, (int, float)) else value
-        for value in quote.get("points", [])
-    ]
-    return converted
+
+async def _boerse_security_details(isin: str) -> dict[str, Any]:
+    payload = await _boerse_signed_get("data/data_sheet_header", {"isin": isin})
+    return payload if isinstance(payload, dict) else {}
 
 
-async def search_stocks(query: str) -> list[dict[str, str]]:
-    params = {
-        "q": query,
-        "quotesCount": "10",
-        "newsCount": "0",
-        "enableFuzzyQuery": "true",
-        "lang": "de-DE",
-        "region": "DE",
-    }
-    headers = {"User-Agent": "WW14-Dashboard/1.0"}
+async def _search_boerse_stocks(query: str) -> list[dict[str, str]]:
+    payload = await _boerse_signed_get(
+        "global_search/limitedsearch/de",
+        {"searchTerms": ",".join(query.split())},
+    )
+    grouped = payload if isinstance(payload, list) else []
+    matches: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for group in grouped:
+        if not isinstance(group, list):
+            continue
+        for item in group:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("type", "")).upper() not in {"EQUITY", "ETF"}:
+                continue
+            isin = str(item.get("isin", "")).strip().upper()
+            if not isin or isin in seen:
+                continue
+            seen.add(isin)
+            matches.append(item)
+            if len(matches) >= 6:
+                break
+        if len(matches) >= 6:
+            break
 
+    details = await asyncio.gather(
+        *(_boerse_security_details(str(item["isin"])) for item in matches),
+        return_exceptions=True,
+    )
+    results: list[dict[str, str]] = []
+    for item, detail in zip(matches, details):
+        detail = detail if isinstance(detail, dict) else {}
+        isin = str(item["isin"]).upper()
+        symbol = str(
+            detail.get("exchangeSymbol") or detail.get("wkn") or isin
+        ).upper()
+        label = _translated_market_name(
+            detail.get("instrumentName") or item.get("name")
+        )
+        results.append(
+            {
+                "symbol": symbol,
+                "label": label or symbol,
+                "exchange": "Börse Frankfurt / Xetra",
+                "asset_type": "stock",
+                "currency": "EUR",
+                "provider": "boerse_frankfurt",
+                "provider_id": isin,
+            }
+        )
+    return results
+
+
+def _crypto_display_symbol(base: str) -> str:
+    raw = base.upper()
+    if raw in {"XBT", "XXBT"}:
+        return "BTC"
+    if raw in {"XDG", "XXDG"}:
+        return "DOGE"
+    return raw[1:] if len(raw) > 3 and raw[0] in {"X", "Z"} else raw
+
+
+async def _kraken_eur_pairs() -> list[dict[str, str]]:
     async def load() -> list[dict[str, str]]:
-        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
             response = await client.get(
-                "https://query2.finance.yahoo.com/v1/finance/search",
-                params=params,
-                headers=headers,
+                f"{_KRAKEN_API}/AssetPairs", headers=_market_headers()
             )
             response.raise_for_status()
             payload = response.json()
-        results: list[dict[str, str]] = []
-        for item in payload.get("quotes", []):
-            quote_type = str(item.get("quoteType", "")).upper()
-            if quote_type not in {"EQUITY", "ETF", "CRYPTOCURRENCY"}:
+        if payload.get("error"):
+            raise RuntimeError(", ".join(payload["error"]))
+        result: list[dict[str, str]] = []
+        for pair_id, item in (payload.get("result") or {}).items():
+            wsname = str(item.get("wsname") or "")
+            if not wsname.endswith("/EUR") or item.get("status") != "online":
                 continue
-            symbol = str(item.get("symbol", "")).strip().upper()
-            if not symbol:
-                continue
-            results.append(
+            base = _crypto_display_symbol(wsname.split("/", 1)[0])
+            result.append(
                 {
-                    "symbol": symbol,
-                    "label": str(
-                        item.get("longname") or item.get("shortname") or symbol
-                    ),
-                    "exchange": str(
-                        item.get("exchDisp") or item.get("exchange") or ""
-                    ),
-                    "asset_type": "crypto"
-                    if quote_type == "CRYPTOCURRENCY"
-                    else "stock",
+                    "symbol": f"{base}-EUR",
+                    "label": _CRYPTO_NAMES.get(base, base),
+                    "exchange": "Kraken",
+                    "asset_type": "crypto",
+                    "currency": "EUR",
+                    "provider": "kraken",
+                    "provider_id": str(item.get("altname") or pair_id).upper(),
                 }
             )
-        return results
+        return result
 
-    return await _cache.get_or_load(f"stock-search:{query.lower()}", 900, load)
+    return await _market_metadata_cache.get_or_load("kraken:eur-pairs", 21600, load)
+
+
+async def _search_kraken_assets(query: str) -> list[dict[str, str]]:
+    lowered = query.casefold()
+    matches = [
+        item
+        for item in await _kraken_eur_pairs()
+        if lowered in item["symbol"].casefold()
+        or lowered in item["label"].casefold()
+    ]
+    return matches[:6]
+
+
+async def search_stocks(query: str) -> list[dict[str, str]]:
+    async def load() -> list[dict[str, str]]:
+        sources = await asyncio.gather(
+            _search_boerse_stocks(query),
+            _search_kraken_assets(query),
+            return_exceptions=True,
+        )
+        results = [
+            item
+            for source in sources
+            if isinstance(source, list)
+            for item in source
+        ]
+        if not results and all(isinstance(source, Exception) for source in sources):
+            raise RuntimeError(str(sources[0]))
+        lowered = query.casefold()
+
+        def relevance(item: dict[str, str]) -> tuple[int, str]:
+            symbol = item["symbol"].casefold()
+            label = item["label"].casefold()
+            score = (
+                0
+                if lowered in {symbol, label}
+                else 1
+                if symbol.startswith(lowered) or label.startswith(lowered)
+                else 2
+            )
+            return score, label
+
+        return sorted(results, key=relevance)[:10]
+
+    return await _market_search_cache.get_or_load(
+        f"market-search:{query.casefold()}", 900, load
+    )
+
+
+async def _resolve_boerse_isin(item: dict[str, Any]) -> str:
+    provider_id = str(item.get("provider_id") or "").strip().upper()
+    if re.fullmatch(r"[A-Z]{2}[A-Z0-9]{9}[0-9]", provider_id):
+        return provider_id
+    results = await _search_boerse_stocks(
+        str(item.get("label") or item.get("symbol") or "")
+    )
+    if not results:
+        raise RuntimeError(
+            f'Kein Börsenplatz für {item.get("label") or item.get("symbol")}'
+        )
+    symbol = str(item.get("symbol") or "").split(".", 1)[0].upper()
+    exact = next(
+        (result for result in results if result["symbol"] == symbol), results[0]
+    )
+    return exact["provider_id"]
+
+
+async def _fetch_boerse_stock(item: dict[str, Any]) -> dict[str, Any]:
+    isin = await _resolve_boerse_isin(item)
+    price_payload: dict[str, Any] = {}
+    selected_mic = "XETR"
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        for mic in ("XETR", "XFRA"):
+            response = await client.get(
+                f"{_BOERSE_API}/data/price_information/single",
+                params={"isin": isin, "mic": mic},
+                headers=_market_headers(),
+            )
+            response.raise_for_status()
+            payload = response.json()
+            if isinstance(payload, dict) and isinstance(
+                payload.get("lastPrice"), (int, float)
+            ):
+                price_payload = payload
+                selected_mic = mic
+                break
+    if not price_payload:
+        raise RuntimeError(f"Kein Kurs für {item.get('label') or item.get('symbol')}")
+
+    today = datetime.now(ZoneInfo("Europe/Berlin")).date()
+    points: list[float] = []
+    try:
+        history = await _boerse_signed_get(
+            "data/price_history",
+            {
+                "isin": isin,
+                "mic": selected_mic,
+                "minDate": (today - timedelta(days=45)).isoformat(),
+                "maxDate": today.isoformat(),
+                "cleanSplit": "false",
+                "cleanPayout": "false",
+                "cleanSubscriptionRights": "false",
+            },
+        )
+        points = [
+            float(entry["close"])
+            for entry in reversed(history.get("data", []))
+            if isinstance(entry, dict) and isinstance(entry.get("close"), (int, float))
+        ][-32:]
+    except Exception:
+        points = []
+    previous = price_payload.get("closingPricePrevTradingDay")
+    current = price_payload.get("lastPrice")
+    if len(points) < 2:
+        points = [
+            float(value)
+            for value in (previous, current)
+            if isinstance(value, (int, float))
+        ]
+    return {
+        **item,
+        "provider": "boerse_frankfurt",
+        "provider_id": isin,
+        "price": current,
+        "previous_close": previous,
+        "change_percent": price_payload.get("changeToPrevDayInPercent"),
+        "currency": "EUR",
+        "points": points,
+        "market_state": price_payload.get("timestampLastPrice", ""),
+        "status": "live",
+    }
+
+
+async def _resolve_kraken_pair(item: dict[str, Any]) -> str:
+    provider_id = str(item.get("provider_id") or "").strip().upper()
+    if provider_id:
+        return provider_id
+    symbol = str(item.get("symbol") or "").upper()
+    base = symbol.replace("-EUR", "").replace("/EUR", "").split("-", 1)[0]
+    pair = next(
+        (
+            value
+            for value in await _kraken_eur_pairs()
+            if value["symbol"] == f"{base}-EUR"
+        ),
+        None,
+    )
+    if not pair:
+        raise RuntimeError(f"Kein EUR-Kryptopaar für {symbol}")
+    return pair["provider_id"]
+
+
+async def _fetch_kraken_crypto(item: dict[str, Any]) -> dict[str, Any]:
+    pair = await _resolve_kraken_pair(item)
+    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        ticker_response, ohlc_response = await asyncio.gather(
+            client.get(
+                f"{_KRAKEN_API}/Ticker",
+                params={"pair": pair},
+                headers=_market_headers(),
+            ),
+            client.get(
+                f"{_KRAKEN_API}/OHLC",
+                params={"pair": pair, "interval": 60},
+                headers=_market_headers(),
+            ),
+        )
+    ticker_response.raise_for_status()
+    ohlc_response.raise_for_status()
+    ticker_payload = ticker_response.json()
+    ohlc_payload = ohlc_response.json()
+    errors = list(ticker_payload.get("error") or []) + list(
+        ohlc_payload.get("error") or []
+    )
+    if errors:
+        raise RuntimeError(", ".join(errors))
+    ticker = next(iter((ticker_payload.get("result") or {}).values()), {})
+    ohlc_result = ohlc_payload.get("result") or {}
+    candles = next(
+        (value for key, value in ohlc_result.items() if key != "last"), []
+    )
+    points = [
+        float(candle[4])
+        for candle in candles[-24:]
+        if isinstance(candle, list) and len(candle) > 4
+    ]
+    current = float(ticker["c"][0])
+    previous = points[0] if points else float(ticker.get("o") or current)
+    change = ((current - previous) / previous * 100) if previous else None
+    return {
+        **item,
+        "provider": "kraken",
+        "provider_id": pair,
+        "price": current,
+        "previous_close": previous,
+        "change_percent": change,
+        "currency": "EUR",
+        "points": points or [previous, current],
+        "market_state": "open",
+        "status": "live",
+    }
 
 
 def _demo_stocks(section: dict[str, Any]) -> list[dict[str, Any]]:
@@ -777,25 +1060,40 @@ async def get_stocks(config: dict[str, Any]) -> dict[str, Any]:
         }
 
     async def load() -> list[dict[str, Any]]:
-        results = []
-        for item in section.get("symbols", []):
-            quote_data = await _quote_in_euro(
-                await _fetch_yahoo_stock(item["symbol"])
-            )
-            results.append({**item, **quote_data, "status": "live"})
-        return results
+        tasks = [
+            _fetch_kraken_crypto(item)
+            if item.get("asset_type") == "crypto" or item.get("provider") == "kraken"
+            else _fetch_boerse_stock(item)
+            for item in section.get("symbols", [])
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        errors = [str(result) for result in results if isinstance(result, Exception)]
+        if errors:
+            raise RuntimeError("; ".join(errors))
+        return [result for result in results if isinstance(result, dict)]
 
     try:
-        symbols = ",".join(item.get("symbol", "") for item in section.get("symbols", []))
-        items = await _cache.get_or_load(
-            f"stocks:{symbols}", int(section.get("cache_seconds", 300)), load
+        symbols = ",".join(
+            f'{item.get("provider", "")}:{item.get("provider_id") or item.get("symbol", "")}'
+            for item in section.get("symbols", [])
         )
-        return {"status": "live", "items": items}
+        items, stale = await _cache.get_or_load_with_stale(
+            f"stocks:{symbols}",
+            int(section.get("cache_seconds", 300)),
+            int(section.get("stale_seconds", 21600)),
+            int(section.get("retry_seconds", 120)),
+            load,
+        )
+        return {
+            "status": "stale" if stale else "live",
+            "message": "Letzter erfolgreicher Stand" if stale else "Börse Frankfurt · Kraken",
+            "items": items,
+        }
     except Exception as exc:
         return {
             "status": "error",
-            "message": f"Aktienkurse nicht erreichbar: {exc}",
-            "items": _demo_stocks(section),
+            "message": f"Marktdaten nicht erreichbar: {exc}",
+            "items": [],
         }
 
 

@@ -71,13 +71,15 @@ departures:
 
 stocks:
   enabled: true
-  provider: yahoo
+  provider: boerse_frankfurt
   cache_seconds: 300
+  retry_seconds: 120
+  stale_seconds: 21600
   symbols:
-    - { symbol: "VNA.DE", label: Vonovia, currency: EUR, price: 27.5 }
-    - { symbol: "SAP.DE", label: SAP, currency: EUR, price: 232.4 }
-    - { symbol: "SIE.DE", label: Siemens, currency: EUR, price: 226.1 }
-    - { symbol: "AAPL", label: Apple, currency: USD, price: 246.5 }
+    - { symbol: "VNA.DE", label: Vonovia, currency: EUR, provider: boerse_frankfurt, provider_id: DE000A1ML7J1, price: 27.5 }
+    - { symbol: "SAP.DE", label: SAP, currency: EUR, provider: boerse_frankfurt, provider_id: DE0007164600, price: 232.4 }
+    - { symbol: "SIE.DE", label: Siemens, currency: EUR, provider: boerse_frankfurt, provider_id: DE0007236101, price: 226.1 }
+    - { symbol: "AAPL", label: Apple, currency: EUR, provider: boerse_frankfurt, provider_id: US0378331005, price: 246.5 }
 
 weather:
   enabled: true

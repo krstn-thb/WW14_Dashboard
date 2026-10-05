@@ -32,6 +32,8 @@ class TodoStore:
                     label TEXT NOT NULL,
                     currency TEXT NOT NULL DEFAULT '',
                     asset_type TEXT NOT NULL DEFAULT 'stock',
+                    provider TEXT NOT NULL DEFAULT '',
+                    provider_id TEXT NOT NULL DEFAULT '',
                     sort_order INTEGER NOT NULL,
                     created_at TEXT NOT NULL
                 )
@@ -44,6 +46,14 @@ class TodoStore:
             if "asset_type" not in stock_columns:
                 connection.execute(
                     "ALTER TABLE stocks ADD COLUMN asset_type TEXT NOT NULL DEFAULT 'stock'"
+                )
+            if "provider" not in stock_columns:
+                connection.execute(
+                    "ALTER TABLE stocks ADD COLUMN provider TEXT NOT NULL DEFAULT ''"
+                )
+            if "provider_id" not in stock_columns:
+                connection.execute(
+                    "ALTER TABLE stocks ADD COLUMN provider_id TEXT NOT NULL DEFAULT ''"
                 )
             connection.execute(
                 """
@@ -229,25 +239,42 @@ class TodoStore:
                 connection.execute(
                     """
                     INSERT OR IGNORE INTO stocks
-                        (symbol, label, currency, asset_type, sort_order, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                        (symbol, label, currency, asset_type, provider, provider_id, sort_order, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         symbol,
                         str(item.get("label") or symbol).strip(),
                         str(item.get("currency", "")).strip().upper(),
                         str(item.get("asset_type") or "stock").strip().lower(),
+                        str(item.get("provider", "")).strip().lower(),
+                        str(item.get("provider_id", "")).strip().upper(),
                         index,
                         now,
                     ),
                 )
 
         self._seed_once("stocks_seeded_v1", seed)
+        with self._connect() as connection:
+            for item in items:
+                symbol = str(item.get("symbol", "")).strip().upper()
+                provider = str(item.get("provider", "")).strip().lower()
+                provider_id = str(item.get("provider_id", "")).strip().upper()
+                if symbol and (provider or provider_id):
+                    connection.execute(
+                        """
+                        UPDATE stocks
+                        SET provider = CASE WHEN ? = '' THEN provider ELSE ? END,
+                            provider_id = CASE WHEN ? = '' THEN provider_id ELSE ? END
+                        WHERE symbol = ?
+                        """,
+                        (provider, provider, provider_id, provider_id, symbol),
+                    )
 
     def list_stocks(self) -> list[dict[str, Any]]:
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT symbol, label, currency, asset_type FROM stocks ORDER BY sort_order, created_at"
+                "SELECT symbol, label, currency, asset_type, provider, provider_id FROM stocks ORDER BY sort_order, created_at"
             ).fetchall()
         return [dict(row) for row in rows]
 
@@ -257,6 +284,8 @@ class TodoStore:
         label: str,
         currency: str = "",
         asset_type: str = "stock",
+        provider: str = "",
+        provider_id: str = "",
     ) -> dict[str, Any]:
         symbol = symbol.strip().upper()
         label = label.strip() or symbol
@@ -268,24 +297,28 @@ class TodoStore:
             connection.execute(
                 """
                 INSERT INTO stocks
-                    (symbol, label, currency, asset_type, sort_order, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                    (symbol, label, currency, asset_type, provider, provider_id, sort_order, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(symbol) DO UPDATE SET
                     label = excluded.label,
                     currency = CASE WHEN excluded.currency = '' THEN stocks.currency ELSE excluded.currency END,
-                    asset_type = excluded.asset_type
+                    asset_type = excluded.asset_type,
+                    provider = CASE WHEN excluded.provider = '' THEN stocks.provider ELSE excluded.provider END,
+                    provider_id = CASE WHEN excluded.provider_id = '' THEN stocks.provider_id ELSE excluded.provider_id END
                 """,
                 (
                     symbol,
                     label,
                     currency.strip().upper(),
                     asset_type if asset_type in {"stock", "crypto"} else "stock",
+                    provider.strip().lower(),
+                    provider_id.strip().upper(),
                     next_order,
                     now,
                 ),
             )
             row = connection.execute(
-                "SELECT symbol, label, currency, asset_type FROM stocks WHERE symbol = ?",
+                "SELECT symbol, label, currency, asset_type, provider, provider_id FROM stocks WHERE symbol = ?",
                 (symbol,),
             ).fetchone()
         return dict(row)

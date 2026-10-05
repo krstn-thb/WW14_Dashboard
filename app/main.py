@@ -43,6 +43,8 @@ class StockCreate(BaseModel):
     label: str = Field(default="", max_length=120)
     currency: str = Field(default="", max_length=8)
     asset_type: str = Field(default="stock", max_length=16)
+    provider: str = Field(default="", max_length=32)
+    provider_id: str = Field(default="", max_length=64)
 
 
 class ClimateMetricCreate(BaseModel):
@@ -312,6 +314,8 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
             payload.label.strip() or symbol,
             payload.currency.strip().upper(),
             "crypto" if payload.asset_type.strip().lower() == "crypto" else "stock",
+            payload.provider.strip().lower(),
+            payload.provider_id.strip().upper(),
         )
 
     @application.delete("/api/stocks/{symbol}", status_code=status.HTTP_204_NO_CONTENT)

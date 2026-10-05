@@ -755,7 +755,7 @@ $("#stock-search-form").addEventListener("submit", async (event) => {
   try {
     const items = await request(`/api/stocks/search?q=${encodeURIComponent(query)}`);
     target.innerHTML = items.length
-      ? items.map((item) => `<button class="manage-result" type="button" data-add-stock="${escapeHtml(item.symbol)}" data-stock-label="${escapeHtml(item.label)}" data-stock-type="${escapeHtml(item.asset_type || "stock")}">
+      ? items.map((item) => `<button class="manage-result" type="button" data-add-stock="${escapeHtml(item.symbol)}" data-stock-label="${escapeHtml(item.label)}" data-stock-type="${escapeHtml(item.asset_type || "stock")}" data-stock-provider="${escapeHtml(item.provider || "")}" data-stock-provider-id="${escapeHtml(item.provider_id || "")}" data-stock-currency="${escapeHtml(item.currency || "EUR")}">
         <span class="manage-copy"><strong>${escapeHtml(item.label)}</strong><span>${item.asset_type === "crypto" ? "Krypto" : "Aktie"} · ${escapeHtml(item.symbol)}${item.exchange ? ` · ${escapeHtml(item.exchange)}` : ""}</span></span>
         <span>Hinzufügen</span>
       </button>`).join("")
@@ -778,6 +778,9 @@ $("#stock-search-results").addEventListener("click", async (event) => {
         symbol: button.dataset.addStock,
         label: button.dataset.stockLabel,
         asset_type: button.dataset.stockType || "stock",
+        provider: button.dataset.stockProvider || "",
+        provider_id: button.dataset.stockProviderId || "",
+        currency: button.dataset.stockCurrency || "EUR",
       }),
     });
     await refreshStockSelections();

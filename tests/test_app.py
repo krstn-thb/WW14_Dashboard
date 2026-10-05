@@ -11,9 +11,9 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 from app.sources import (
     AsyncTTLCache,
+    _crypto_display_symbol,
     _expand_recurring_events,
     _parse_mensa_menu,
-    _quote_in_euro,
     _weather_description,
     get_departures,
     get_stocks,
@@ -109,7 +109,14 @@ def test_stock_selection_lifecycle(tmp_path: Path) -> None:
     app = create_app(make_config(tmp_path))
     with TestClient(app) as client:
         created = client.post(
-            "/api/stocks", json={"symbol": "VNA.DE", "label": "Vonovia"}
+            "/api/stocks",
+            json={
+                "symbol": "VNA.DE",
+                "label": "Vonovia",
+                "currency": "EUR",
+                "provider": "boerse_frankfurt",
+                "provider_id": "DE000A1ML7J1",
+            },
         )
         listed = client.get("/api/stocks")
         deleted = client.delete("/api/stocks/VNA.DE")
@@ -119,8 +126,10 @@ def test_stock_selection_lifecycle(tmp_path: Path) -> None:
         {
             "symbol": "VNA.DE",
             "label": "Vonovia",
-            "currency": "",
+            "currency": "EUR",
             "asset_type": "stock",
+            "provider": "boerse_frankfurt",
+            "provider_id": "DE000A1ML7J1",
         }
     ]
     assert deleted.status_code == 204
@@ -143,56 +152,34 @@ def test_crypto_selection_is_persisted(tmp_path: Path) -> None:
     assert listed.json()[0]["asset_type"] == "crypto"
 
 
-def test_market_quote_is_converted_to_euro(monkeypatch) -> None:
-    async def fake_fetch(symbol: str):
-        assert symbol == "USDEUR=X"
-        return {"price": 0.8}
-
-    monkeypatch.setattr("app.sources._fetch_yahoo_stock", fake_fetch)
-    result = asyncio.run(
-        _quote_in_euro(
-            {
-                "price": 100.0,
-                "previous_close": 90.0,
-                "currency": "USD",
-                "points": [90.0, 100.0],
-            }
-        )
-    )
-
-    assert result["currency"] == "EUR"
-    assert result["original_currency"] == "USD"
-    assert result["price"] == 80.0
-    assert result["previous_close"] == 72.0
-    assert result["points"] == [72.0, 80.0]
-
-
-def test_live_stock_collection_converts_without_cache_deadlock(monkeypatch) -> None:
-    async def fake_fetch(symbol: str):
-        if symbol == "ZZZEUR=X":
-            return {"price": 0.5}
-        assert symbol == "TEST-ZZZ"
+def test_live_stock_collection_uses_boerse_frankfurt(monkeypatch) -> None:
+    async def fake_fetch(item: dict):
+        assert item["symbol"] == "TEST-EUR"
         return {
+            **item,
             "price": 20.0,
             "previous_close": 18.0,
             "change_percent": 11.11,
-            "currency": "ZZZ",
+            "currency": "EUR",
             "points": [18.0, 20.0],
+            "status": "live",
         }
 
-    monkeypatch.setattr("app.sources._fetch_yahoo_stock", fake_fetch)
+    monkeypatch.setattr("app.sources._fetch_boerse_stock", fake_fetch)
     result = asyncio.run(
         asyncio.wait_for(
             get_stocks(
                 {
                     "stocks": {
                         "enabled": True,
-                        "provider": "yahoo",
+                        "provider": "boerse_frankfurt",
                         "symbols": [
                             {
-                                "symbol": "TEST-ZZZ",
+                                "symbol": "TEST-EUR",
                                 "label": "Testwert",
                                 "asset_type": "stock",
+                                "provider": "boerse_frankfurt",
+                                "provider_id": "TEST00000001",
                             }
                         ],
                     }
@@ -203,8 +190,54 @@ def test_live_stock_collection_converts_without_cache_deadlock(monkeypatch) -> N
     )
 
     assert result["status"] == "live"
-    assert result["items"][0]["price"] == 10.0
+    assert result["items"][0]["price"] == 20.0
     assert result["items"][0]["currency"] == "EUR"
+
+
+def test_kraken_symbols_are_presented_with_common_names() -> None:
+    assert _crypto_display_symbol("XBT") == "BTC"
+    assert _crypto_display_symbol("XXBT") == "BTC"
+    assert _crypto_display_symbol("XDG") == "DOGE"
+    assert _crypto_display_symbol("XETH") == "ETH"
+
+
+def test_live_crypto_collection_uses_kraken(monkeypatch) -> None:
+    async def fake_fetch(item: dict):
+        assert item["provider_id"] == "TESTEUR"
+        return {
+            **item,
+            "price": 42.0,
+            "change_percent": 2.5,
+            "currency": "EUR",
+            "points": [40.0, 42.0],
+            "status": "live",
+        }
+
+    monkeypatch.setattr("app.sources._fetch_kraken_crypto", fake_fetch)
+    result = asyncio.run(
+        get_stocks(
+            {
+                "stocks": {
+                    "enabled": True,
+                    "provider": "boerse_frankfurt",
+                    "cache_seconds": 1,
+                    "symbols": [
+                        {
+                            "symbol": "TEST-EUR",
+                            "label": "Testcoin",
+                            "asset_type": "crypto",
+                            "provider": "kraken",
+                            "provider_id": "TESTEUR",
+                        }
+                    ],
+                }
+            }
+        )
+    )
+
+    assert result["status"] == "live"
+    assert result["items"][0]["price"] == 42.0
+    assert result["items"][0]["provider"] == "kraken"
 
 
 def test_mensa_menu_parser_extracts_meals() -> None:
