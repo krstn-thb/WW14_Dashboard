@@ -1052,6 +1052,28 @@ def _demo_stocks(section: dict[str, Any]) -> list[dict[str, Any]]:
 
 async def get_stocks(config: dict[str, Any]) -> dict[str, Any]:
     section = config.get("stocks", {})
+    cached_quotes = section.get("cached_quotes", {})
+
+    def fallback_item(item: dict[str, Any], error: Exception | str) -> dict[str, Any]:
+        cached = cached_quotes.get(str(item.get("symbol") or "").upper())
+        if isinstance(cached, dict) and isinstance(cached.get("price"), (int, float)):
+            return {
+                **item,
+                **cached,
+                "label": item.get("label") or cached.get("label"),
+                "symbol": item.get("symbol") or cached.get("symbol"),
+                "currency": "EUR",
+                "status": "stale",
+                "error": str(error),
+            }
+        return {
+            **item,
+            "currency": "EUR",
+            "points": [],
+            "status": "error",
+            "error": str(error),
+        }
+
     if not section.get("enabled", False) or section.get("provider", "demo") == "demo":
         return {
             "status": "demo",
@@ -1076,15 +1098,7 @@ async def get_stocks(config: dict[str, Any]) -> dict[str, Any]:
                     configured.get("label") or configured.get("symbol") or "Wert"
                 )
                 errors.append(f"{label}: {result}")
-                items.append(
-                    {
-                        **configured,
-                        "currency": "EUR",
-                        "points": [],
-                        "status": "error",
-                        "error": str(result),
-                    }
-                )
+                items.append(fallback_item(configured, result))
             elif isinstance(result, dict):
                 items.append(result)
         if errors and len(errors) == len(results):
@@ -1110,12 +1124,22 @@ async def get_stocks(config: dict[str, Any]) -> dict[str, Any]:
             for item in items
             if item.get("status") == "error"
         ]
+        saved = [
+            str(item.get("label") or item.get("symbol") or "Wert")
+            for item in items
+            if item.get("status") == "stale"
+        ]
         if stale:
             status = "stale"
             message = "Letzter erfolgreicher Stand"
         elif errors:
             status = "partial"
-            message = f"Nicht erreichbar: {', '.join(unavailable)}"
+            details = []
+            if saved:
+                details.append(f"letzter Kurs: {', '.join(saved)}")
+            if unavailable:
+                details.append(f"ohne Kurs: {', '.join(unavailable)}")
+            message = " · ".join(details)
         else:
             status = "live"
             message = "Börse Frankfurt · Kraken"
@@ -1125,19 +1149,14 @@ async def get_stocks(config: dict[str, Any]) -> dict[str, Any]:
             "items": items,
         }
     except Exception as exc:
+        items = [fallback_item(item, exc) for item in section.get("symbols", [])]
+        has_saved_value = any(item.get("status") == "stale" for item in items)
         return {
-            "status": "error",
-            "message": f"Marktdaten nicht erreichbar: {exc}",
-            "items": [
-                {
-                    **item,
-                    "currency": "EUR",
-                    "points": [],
-                    "status": "error",
-                    "error": str(exc),
-                }
-                for item in section.get("symbols", [])
-            ],
+            "status": "stale" if has_saved_value else "error",
+            "message": "Letzter dauerhaft gespeicherter Kurs"
+            if has_saved_value
+            else f"Marktdaten konnten nicht abgerufen werden: {exc}",
+            "items": items,
         }
 
 

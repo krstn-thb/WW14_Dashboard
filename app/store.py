@@ -73,6 +73,15 @@ class TodoStore:
             )
             connection.execute(
                 """
+                CREATE TABLE IF NOT EXISTS market_quotes (
+                    symbol TEXT PRIMARY KEY COLLATE NOCASE,
+                    quote_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
                 CREATE TABLE IF NOT EXISTS deadlines (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     title TEXT NOT NULL,
@@ -328,7 +337,75 @@ class TodoStore:
             cursor = connection.execute(
                 "DELETE FROM stocks WHERE symbol = ?", (symbol.strip().upper(),)
             )
+            connection.execute(
+                "DELETE FROM market_quotes WHERE symbol = ?",
+                (symbol.strip().upper(),),
+            )
         return cursor.rowcount > 0
+
+    def list_market_quotes(self) -> dict[str, dict[str, Any]]:
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT symbol, quote_json, updated_at FROM market_quotes"
+            ).fetchall()
+        quotes: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            try:
+                quote = json.loads(row["quote_json"])
+            except (TypeError, json.JSONDecodeError):
+                continue
+            if isinstance(quote, dict):
+                quote["cached_at"] = row["updated_at"]
+                quotes[str(row["symbol"]).upper()] = quote
+        return quotes
+
+    def save_market_quotes(self, items: list[dict[str, Any]]) -> None:
+        now = datetime.now(UTC).isoformat()
+        with self._connect() as connection:
+            for item in items:
+                symbol = str(item.get("symbol") or "").strip().upper()
+                price = item.get("price")
+                if not symbol or item.get("status") != "live" or not isinstance(
+                    price, (int, float)
+                ):
+                    continue
+                quote = {**item, "cached_at": now}
+                connection.execute(
+                    """
+                    INSERT INTO market_quotes (symbol, quote_json, updated_at)
+                    VALUES (?, ?, ?)
+                    ON CONFLICT(symbol) DO UPDATE SET
+                        quote_json = excluded.quote_json,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        symbol,
+                        json.dumps(quote, ensure_ascii=False, sort_keys=True),
+                        now,
+                    ),
+                )
+                provider = str(item.get("provider") or "").strip().lower()
+                provider_id = str(item.get("provider_id") or "").strip().upper()
+                currency = str(item.get("currency") or "").strip().upper()
+                if provider or provider_id:
+                    connection.execute(
+                        """
+                        UPDATE stocks
+                        SET provider = CASE WHEN ? = '' THEN provider ELSE ? END,
+                            provider_id = CASE WHEN ? = '' THEN provider_id ELSE ? END,
+                            currency = CASE WHEN ? = '' THEN currency ELSE ? END
+                        WHERE symbol = ?
+                        """,
+                        (
+                            provider,
+                            provider,
+                            provider_id,
+                            provider_id,
+                            currency,
+                            currency,
+                            symbol,
+                        ),
+                    )
 
     def seed_climate_metrics(self, items: list[dict[str, Any]]) -> None:
         now = datetime.now(UTC).isoformat()

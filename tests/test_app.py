@@ -19,6 +19,7 @@ from app.sources import (
     get_stocks,
     get_weather,
 )
+from app.store import TodoStore
 
 
 def make_config(tmp_path: Path) -> Path:
@@ -263,6 +264,72 @@ def test_all_failed_market_items_remain_visible(monkeypatch) -> None:
     assert result["status"] == "error"
     assert result["items"][0]["label"] == "Gespeicherter Wert"
     assert result["items"][0]["status"] == "error"
+
+
+def test_saved_market_quote_is_used_after_restart_style_failure(monkeypatch) -> None:
+    async def fake_fetch(item: dict):
+        raise RuntimeError(f"Abruf für {item['symbol']} fehlgeschlagen")
+
+    monkeypatch.setattr("app.sources._fetch_boerse_stock", fake_fetch)
+    result = asyncio.run(
+        get_stocks(
+            {
+                "stocks": {
+                    "enabled": True,
+                    "provider": "boerse_frankfurt",
+                    "symbols": [
+                        {
+                            "symbol": "SAVED-EUR",
+                            "label": "Gespeicherte Aktie",
+                            "asset_type": "stock",
+                        }
+                    ],
+                    "cached_quotes": {
+                        "SAVED-EUR": {
+                            "symbol": "SAVED-EUR",
+                            "label": "Gespeicherte Aktie",
+                            "price": 123.45,
+                            "currency": "EUR",
+                            "points": [120.0, 123.45],
+                            "status": "live",
+                        }
+                    },
+                }
+            }
+        )
+    )
+
+    assert result["status"] == "stale"
+    assert result["items"][0]["price"] == 123.45
+    assert result["items"][0]["status"] == "stale"
+
+
+def test_market_quote_is_persisted_in_database(tmp_path: Path) -> None:
+    store = TodoStore(tmp_path / "quotes.db")
+    store.initialise()
+    store.add_stock("BTC-USD", "Bitcoin", "USD", "crypto")
+    store.save_market_quotes(
+        [
+            {
+                "symbol": "BTC-USD",
+                "label": "Bitcoin",
+                "price": 54321.0,
+                "currency": "EUR",
+                "points": [54000.0, 54321.0],
+                "status": "live",
+                "provider": "kraken",
+                "provider_id": "XBTEUR",
+            }
+        ]
+    )
+
+    quotes = store.list_market_quotes()
+    selected = store.list_stocks()[0]
+    assert quotes["BTC-USD"]["price"] == 54321.0
+    assert quotes["BTC-USD"]["cached_at"]
+    assert selected["currency"] == "EUR"
+    assert selected["provider"] == "kraken"
+    assert selected["provider_id"] == "XBTEUR"
 
 
 def test_kraken_symbols_are_presented_with_common_names() -> None:

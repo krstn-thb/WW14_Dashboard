@@ -198,6 +198,7 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
         timezone = _timezone(config)
         (
             selected_stocks,
+            saved_market_quotes,
             selected_metrics,
             manual_deadlines,
             manual_events,
@@ -205,6 +206,7 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
             weather_location,
         ) = await asyncio.gather(
             asyncio.to_thread(store.list_stocks),
+            asyncio.to_thread(store.list_market_quotes),
             asyncio.to_thread(store.list_climate_metrics),
             asyncio.to_thread(store.list_deadlines),
             asyncio.to_thread(store.list_events),
@@ -213,6 +215,7 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
         )
         source_config = copy.deepcopy(config)
         source_config.setdefault("stocks", {})["symbols"] = selected_stocks
+        source_config["stocks"]["cached_quotes"] = saved_market_quotes
         source_config.setdefault("climate", {})["metrics"] = selected_metrics
         source_config.setdefault("deadlines", {})["items"] = manual_deadlines
         source_config["deadlines"]["json_feeds"] = []
@@ -236,6 +239,8 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
             get_weather(source_config),
             get_mensa(source_config),
         )
+        if stocks.get("status") in {"live", "partial"}:
+            await asyncio.to_thread(store.save_market_quotes, stocks.get("items", []))
         response.headers["Cache-Control"] = "no-store"
         dashboard_config = config.get("dashboard", {})
         return {
