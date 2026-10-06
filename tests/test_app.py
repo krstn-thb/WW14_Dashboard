@@ -194,6 +194,77 @@ def test_live_stock_collection_uses_boerse_frankfurt(monkeypatch) -> None:
     assert result["items"][0]["currency"] == "EUR"
 
 
+def test_failed_market_item_does_not_hide_other_selections(monkeypatch) -> None:
+    async def fake_fetch(item: dict):
+        if item["symbol"] == "BROKEN-EUR":
+            raise RuntimeError("Quelle kennt den Wert nicht")
+        return {
+            **item,
+            "price": 20.0,
+            "change_percent": 1.0,
+            "currency": "EUR",
+            "points": [19.0, 20.0],
+            "status": "live",
+        }
+
+    monkeypatch.setattr("app.sources._fetch_boerse_stock", fake_fetch)
+    result = asyncio.run(
+        get_stocks(
+            {
+                "stocks": {
+                    "enabled": True,
+                    "provider": "boerse_frankfurt",
+                    "symbols": [
+                        {
+                            "symbol": "GOOD-EUR",
+                            "label": "Erreichbar",
+                            "asset_type": "stock",
+                        },
+                        {
+                            "symbol": "BROKEN-EUR",
+                            "label": "Altbestand",
+                            "asset_type": "stock",
+                        },
+                    ],
+                }
+            }
+        )
+    )
+
+    assert result["status"] == "partial"
+    assert [item["label"] for item in result["items"]] == ["Erreichbar", "Altbestand"]
+    assert result["items"][0]["price"] == 20.0
+    assert result["items"][1]["status"] == "error"
+
+
+def test_all_failed_market_items_remain_visible(monkeypatch) -> None:
+    async def fake_fetch(item: dict):
+        raise RuntimeError(f"Kein Kurs für {item['symbol']}")
+
+    monkeypatch.setattr("app.sources._fetch_boerse_stock", fake_fetch)
+    result = asyncio.run(
+        get_stocks(
+            {
+                "stocks": {
+                    "enabled": True,
+                    "provider": "boerse_frankfurt",
+                    "symbols": [
+                        {
+                            "symbol": "ONLY-BROKEN",
+                            "label": "Gespeicherter Wert",
+                            "asset_type": "stock",
+                        }
+                    ],
+                }
+            }
+        )
+    )
+
+    assert result["status"] == "error"
+    assert result["items"][0]["label"] == "Gespeicherter Wert"
+    assert result["items"][0]["status"] == "error"
+
+
 def test_kraken_symbols_are_presented_with_common_names() -> None:
     assert _crypto_display_symbol("XBT") == "BTC"
     assert _crypto_display_symbol("XXBT") == "BTC"

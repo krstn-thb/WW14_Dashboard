@@ -1059,41 +1059,85 @@ async def get_stocks(config: dict[str, Any]) -> dict[str, Any]:
             "items": _demo_stocks(section),
         }
 
-    async def load() -> list[dict[str, Any]]:
+    async def load() -> dict[str, Any]:
+        selected = section.get("symbols", [])
         tasks = [
             _fetch_kraken_crypto(item)
             if item.get("asset_type") == "crypto" or item.get("provider") == "kraken"
             else _fetch_boerse_stock(item)
-            for item in section.get("symbols", [])
+            for item in selected
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        errors = [str(result) for result in results if isinstance(result, Exception)]
-        if errors:
+        errors: list[str] = []
+        items: list[dict[str, Any]] = []
+        for configured, result in zip(selected, results):
+            if isinstance(result, Exception):
+                label = str(
+                    configured.get("label") or configured.get("symbol") or "Wert"
+                )
+                errors.append(f"{label}: {result}")
+                items.append(
+                    {
+                        **configured,
+                        "currency": "EUR",
+                        "points": [],
+                        "status": "error",
+                        "error": str(result),
+                    }
+                )
+            elif isinstance(result, dict):
+                items.append(result)
+        if errors and len(errors) == len(results):
             raise RuntimeError("; ".join(errors))
-        return [result for result in results if isinstance(result, dict)]
+        return {"items": items, "errors": errors}
 
     try:
         symbols = ",".join(
             f'{item.get("provider", "")}:{item.get("provider_id") or item.get("symbol", "")}'
             for item in section.get("symbols", [])
         )
-        items, stale = await _cache.get_or_load_with_stale(
+        market_data, stale = await _cache.get_or_load_with_stale(
             f"stocks:{symbols}",
             int(section.get("cache_seconds", 300)),
             int(section.get("stale_seconds", 21600)),
             int(section.get("retry_seconds", 120)),
             load,
         )
+        items = market_data.get("items", [])
+        errors = market_data.get("errors", [])
+        unavailable = [
+            str(item.get("label") or item.get("symbol") or "Wert")
+            for item in items
+            if item.get("status") == "error"
+        ]
+        if stale:
+            status = "stale"
+            message = "Letzter erfolgreicher Stand"
+        elif errors:
+            status = "partial"
+            message = f"Nicht erreichbar: {', '.join(unavailable)}"
+        else:
+            status = "live"
+            message = "Börse Frankfurt · Kraken"
         return {
-            "status": "stale" if stale else "live",
-            "message": "Letzter erfolgreicher Stand" if stale else "Börse Frankfurt · Kraken",
+            "status": status,
+            "message": message,
             "items": items,
         }
     except Exception as exc:
         return {
             "status": "error",
             "message": f"Marktdaten nicht erreichbar: {exc}",
-            "items": [],
+            "items": [
+                {
+                    **item,
+                    "currency": "EUR",
+                    "points": [],
+                    "status": "error",
+                    "error": str(exc),
+                }
+                for item in section.get("symbols", [])
+            ],
         }
 
 

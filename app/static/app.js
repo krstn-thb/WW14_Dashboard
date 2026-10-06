@@ -116,6 +116,8 @@ function sourceState(element, status) {
   element.className = `source-state ${status || ""}`;
   element.textContent = status === "live"
     ? "Live"
+    : status === "partial"
+      ? "Teilweise"
     : status === "stale"
       ? "Gespeichert"
     : status === "error"
@@ -229,10 +231,12 @@ function renderStocks(stocks) {
     ? items.map((item, index) => {
       const change = Number(item.change_percent);
       const negative = change < 0;
-      return `<div class="stock-row ${negative ? "negative" : ""}">
+      const unavailable = item.status === "error" || !Number.isFinite(Number(item.price));
+      const price = unavailable ? "Nicht verfügbar" : `${formatNumber(item.price, 2)} ${escapeHtml(item.currency || "")}`;
+      return `<div class="stock-row ${negative ? "negative" : ""} ${unavailable ? "unavailable" : ""}">
         <div class="stock-name"><strong>${escapeHtml(item.label || item.symbol)}</strong><span>${escapeHtml(item.symbol)} · ${item.asset_type === "crypto" ? "Krypto" : "Aktie"}</span></div>
         ${sparkline(item.points || [], `stock-${index}`)}
-        <div class="stock-price">${formatNumber(item.price, 2)} ${escapeHtml(item.currency || "")}<span class="stock-change ${negative ? "negative" : ""}">${Number.isFinite(change) ? `${negative ? "" : "+"}${formatNumber(change, 2)} %` : "–"}</span></div>
+        <div class="stock-price">${price}<span class="stock-change ${negative ? "negative" : ""}">${unavailable ? "Quelle nicht erreichbar" : Number.isFinite(change) ? `${negative ? "" : "+"}${formatNumber(change, 2)} %` : "–"}</span></div>
       </div>`;
     }).join("")
     : '<div class="empty">Keine Aktien oder Kryptowährungen ausgewählt</div>';

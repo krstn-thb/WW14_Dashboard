@@ -117,6 +117,7 @@ h1 { font-size: clamp(23px, 2vw, 34px); letter-spacing: -0.04em; font-weight: 68
 .source-state.error { color: var(--red); border-color: rgba(255, 143, 134, .18); background: rgba(255, 143, 134, .08); }
 .source-state.demo { color: var(--orange); border-color: rgba(255, 182, 111, .18); background: rgba(255, 182, 111, .08); }
 .source-state.stale { color: var(--orange); border-color: rgba(255, 182, 111, .18); background: rgba(255, 182, 111, .08); }
+.source-state.partial { color: var(--orange); border-color: rgba(255, 182, 111, .18); background: rgba(255, 182, 111, .08); }
 .source-state.disabled { color: var(--muted); }
 .panel-actions { display: flex; align-items: center; gap: 7px; }
 .panel-action {
@@ -904,6 +905,8 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
   opacity: .42;
   pointer-events: none;
 }
+.stocks-panel .stock-row.unavailable { border-color: rgba(255, 182, 111, .18); }
+.stocks-panel .stock-row.unavailable .stock-price { color: var(--orange); font-size: clamp(16px, 1.05vw, 28px); }
 
 .planner-panel { overflow: hidden; }
 .planner-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(13px, 1.2vw, 30px); }
