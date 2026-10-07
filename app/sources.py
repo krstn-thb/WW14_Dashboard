@@ -116,6 +116,7 @@ class AsyncTTLCache:
 _cache = AsyncTTLCache()
 _market_metadata_cache = AsyncTTLCache()
 _market_search_cache = AsyncTTLCache()
+_market_fx_cache = AsyncTTLCache()
 
 
 def _demo_series(base: float, amplitude: float, count: int = 28) -> list[dict[str, Any]]:
@@ -834,21 +835,72 @@ async def _search_kraken_assets(query: str) -> list[dict[str, str]]:
     return matches[:6]
 
 
+async def _search_yahoo_assets(query: str) -> list[dict[str, str]]:
+    params = {
+        "q": query,
+        "quotesCount": "8",
+        "newsCount": "0",
+        "enableFuzzyQuery": "true",
+        "lang": "de-DE",
+        "region": "DE",
+    }
+    async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+        response = await client.get(
+            "https://query2.finance.yahoo.com/v1/finance/search",
+            params=params,
+            headers=_market_headers(),
+        )
+        response.raise_for_status()
+        payload = response.json()
+    results: list[dict[str, str]] = []
+    for item in payload.get("quotes", []):
+        quote_type = str(item.get("quoteType", "")).upper()
+        if quote_type not in {"EQUITY", "ETF", "CRYPTOCURRENCY"}:
+            continue
+        symbol = str(item.get("symbol", "")).strip().upper()
+        if not symbol:
+            continue
+        results.append(
+            {
+                "symbol": symbol,
+                "label": str(item.get("longname") or item.get("shortname") or symbol),
+                "exchange": str(item.get("exchDisp") or item.get("exchange") or "Yahoo"),
+                "asset_type": "crypto"
+                if quote_type == "CRYPTOCURRENCY"
+                else "stock",
+                "currency": str(item.get("currency") or "").upper(),
+                "provider": "yahoo",
+                "provider_id": symbol,
+            }
+        )
+    return results
+
+
 async def search_stocks(query: str) -> list[dict[str, str]]:
     async def load() -> list[dict[str, str]]:
         sources = await asyncio.gather(
             _search_boerse_stocks(query),
             _search_kraken_assets(query),
+            _search_yahoo_assets(query),
             return_exceptions=True,
         )
-        results = [
+        candidates = [
             item
             for source in sources
             if isinstance(source, list)
             for item in source
         ]
-        if not results and all(isinstance(source, Exception) for source in sources):
+        if not candidates and all(isinstance(source, Exception) for source in sources):
             raise RuntimeError(str(sources[0]))
+        results: list[dict[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        for item in candidates:
+            label_key = re.sub(r"\W+", "", item["label"].casefold())
+            key = (item["asset_type"], label_key or item["symbol"].casefold())
+            if key in seen:
+                continue
+            seen.add(key)
+            results.append(item)
         lowered = query.casefold()
 
         def relevance(item: dict[str, str]) -> tuple[int, str]:
@@ -868,6 +920,126 @@ async def search_stocks(query: str) -> list[dict[str, str]]:
     return await _market_search_cache.get_or_load(
         f"market-search:{query.casefold()}", 900, load
     )
+
+
+async def _fetch_yahoo_quote(symbol: str) -> dict[str, Any]:
+    encoded = quote(symbol, safe="")
+    params = {"range": "1d", "interval": "5m", "includePrePost": "false"}
+    errors: list[str] = []
+    for host in ("query1.finance.yahoo.com", "query2.finance.yahoo.com"):
+        try:
+            async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+                response = await client.get(
+                    f"https://{host}/v8/finance/chart/{encoded}",
+                    params=params,
+                    headers=_market_headers(),
+                )
+                response.raise_for_status()
+                payload = response.json()
+            chart = payload.get("chart") or {}
+            if chart.get("error"):
+                raise RuntimeError(str(chart["error"]))
+            result = (chart.get("result") or [None])[0]
+            if not isinstance(result, dict):
+                raise RuntimeError("Yahoo lieferte keinen Kurs")
+            meta = result.get("meta") or {}
+            closes = [
+                value
+                for value in result.get("indicators", {})
+                .get("quote", [{}])[0]
+                .get("close", [])
+                if isinstance(value, (int, float))
+            ]
+            current = meta.get("regularMarketPrice") or (
+                closes[-1] if closes else None
+            )
+            if not isinstance(current, (int, float)):
+                raise RuntimeError("Yahoo lieferte keinen aktuellen Wert")
+            previous = meta.get("chartPreviousClose") or meta.get("previousClose")
+            change_percent = (
+                ((current - previous) / previous) * 100
+                if isinstance(previous, (int, float)) and previous
+                else None
+            )
+            return {
+                "price": current,
+                "previous_close": previous,
+                "change_percent": change_percent,
+                "currency": meta.get("currency", ""),
+                "points": closes[-48:],
+                "market_state": meta.get("marketState", ""),
+            }
+        except Exception as exc:
+            errors.append(f"{host}: {exc}")
+    raise RuntimeError("; ".join(errors))
+
+
+async def _yahoo_quote_in_euro(quote_data: dict[str, Any]) -> dict[str, Any]:
+    raw_currency = str(quote_data.get("currency") or "EUR")
+    currency = raw_currency.upper()
+    minor_factor = 0.01 if raw_currency in {"GBp", "ZAc", "ILA"} else 1.0
+    if minor_factor != 1.0:
+        quote_data = {
+            **quote_data,
+            "price": quote_data.get("price") * minor_factor,
+            "previous_close": quote_data.get("previous_close") * minor_factor
+            if isinstance(quote_data.get("previous_close"), (int, float))
+            else quote_data.get("previous_close"),
+            "points": [
+                value * minor_factor
+                for value in quote_data.get("points", [])
+                if isinstance(value, (int, float))
+            ],
+        }
+        currency = {"GBP": "GBP", "ZAC": "ZAR", "ILA": "ILS"}.get(
+            currency, currency
+        )
+    if currency == "EUR":
+        return {**quote_data, "currency": "EUR"}
+
+    async def load_rate() -> float:
+        rate_quote = await _fetch_yahoo_quote(f"{currency}EUR=X")
+        rate = rate_quote.get("price")
+        if not isinstance(rate, (int, float)) or rate <= 0:
+            raise RuntimeError(f"Kein Yahoo-Wechselkurs für {currency}/EUR")
+        return float(rate)
+
+    rate, _ = await _market_fx_cache.get_or_load_with_stale(
+        f"yahoo-fx:{currency}:EUR", 3600, 86400, 300, load_rate
+    )
+    converted = {
+        **quote_data,
+        "currency": "EUR",
+        "original_currency": raw_currency,
+    }
+    for key in ("price", "previous_close"):
+        value = quote_data.get(key)
+        if isinstance(value, (int, float)):
+            converted[key] = value * rate
+    converted["points"] = [
+        value * rate
+        for value in quote_data.get("points", [])
+        if isinstance(value, (int, float))
+    ]
+    return converted
+
+
+async def _fetch_yahoo_market(item: dict[str, Any]) -> dict[str, Any]:
+    provider = str(item.get("provider") or "").lower()
+    symbol = str(
+        (item.get("provider_id") if provider == "yahoo" else None)
+        or item.get("symbol")
+        or ""
+    ).upper()
+    quote_data = await _yahoo_quote_in_euro(await _fetch_yahoo_quote(symbol))
+    return {
+        **item,
+        **quote_data,
+        "provider": provider or "yahoo",
+        "provider_id": item.get("provider_id") or symbol,
+        "source": "yahoo",
+        "status": "live",
+    }
 
 
 async def _resolve_boerse_isin(item: dict[str, Any]) -> str:
@@ -944,6 +1116,7 @@ async def _fetch_boerse_stock(item: dict[str, Any]) -> dict[str, Any]:
         **item,
         "provider": "boerse_frankfurt",
         "provider_id": isin,
+        "source": "boerse_frankfurt",
         "price": current,
         "previous_close": previous,
         "change_percent": price_payload.get("changeToPrevDayInPercent"),
@@ -956,7 +1129,7 @@ async def _fetch_boerse_stock(item: dict[str, Any]) -> dict[str, Any]:
 
 async def _resolve_kraken_pair(item: dict[str, Any]) -> str:
     provider_id = str(item.get("provider_id") or "").strip().upper()
-    if provider_id:
+    if item.get("provider") == "kraken" and provider_id:
         return provider_id
     symbol = str(item.get("symbol") or "").upper()
     base = symbol.replace("-EUR", "").replace("/EUR", "").split("-", 1)[0]
@@ -1014,6 +1187,7 @@ async def _fetch_kraken_crypto(item: dict[str, Any]) -> dict[str, Any]:
         **item,
         "provider": "kraken",
         "provider_id": pair,
+        "source": "kraken",
         "price": current,
         "previous_close": previous,
         "change_percent": change,
@@ -1022,6 +1196,23 @@ async def _fetch_kraken_crypto(item: dict[str, Any]) -> dict[str, Any]:
         "market_state": "open",
         "status": "live",
     }
+
+
+async def _fetch_market_item(item: dict[str, Any]) -> dict[str, Any]:
+    is_crypto = item.get("asset_type") == "crypto" or item.get("provider") == "kraken"
+    if is_crypto:
+        loaders = (_fetch_kraken_crypto, _fetch_yahoo_market)
+    elif item.get("provider") == "yahoo":
+        loaders = (_fetch_yahoo_market, _fetch_boerse_stock)
+    else:
+        loaders = (_fetch_boerse_stock, _fetch_yahoo_market)
+    errors: list[str] = []
+    for loader in loaders:
+        try:
+            return await loader(item)
+        except Exception as exc:
+            errors.append(f"{loader.__name__}: {exc}")
+    raise RuntimeError("; ".join(errors))
 
 
 def _demo_stocks(section: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1083,12 +1274,7 @@ async def get_stocks(config: dict[str, Any]) -> dict[str, Any]:
 
     async def load() -> dict[str, Any]:
         selected = section.get("symbols", [])
-        tasks = [
-            _fetch_kraken_crypto(item)
-            if item.get("asset_type") == "crypto" or item.get("provider") == "kraken"
-            else _fetch_boerse_stock(item)
-            for item in selected
-        ]
+        tasks = [_fetch_market_item(item) for item in selected]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         errors: list[str] = []
         items: list[dict[str, Any]] = []
@@ -1142,7 +1328,19 @@ async def get_stocks(config: dict[str, Any]) -> dict[str, Any]:
             message = " · ".join(details)
         else:
             status = "live"
-            message = "Börse Frankfurt · Kraken"
+            source_names = {
+                "boerse_frankfurt": "Börse Frankfurt",
+                "kraken": "Kraken",
+                "yahoo": "Yahoo",
+            }
+            active_sources = list(
+                dict.fromkeys(
+                    source_names.get(str(item.get("source") or ""), "")
+                    for item in items
+                    if item.get("source")
+                )
+            )
+            message = " · ".join(filter(None, active_sources)) or "Marktdaten live"
         return {
             "status": status,
             "message": message,

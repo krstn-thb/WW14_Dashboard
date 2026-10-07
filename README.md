@@ -133,7 +133,7 @@ Quelle, Bahnhof und Anzahl lassen sich unter `departures` in `config/dashboard.y
 
 Vonovia (`VNA.DE`) ist standardmäßig die erste Aktie. Über **+** im Märkte-Feld kann nach einem Unternehmen, einer Kryptowährung oder einem Kürzel gesucht werden. Ein Treffer wird per Klick hinzugefügt; ausgewählte Werte lassen sich im selben Fenster wieder entfernen.
 
-Aktienkurse und die Wertpapiersuche kommen von **Börse Frankfurt/Xetra**, Kryptokurse und Kryptopaare von **Kraken**. Beide Quellen liefern die Anzeige direkt in Euro und benötigen keinen API-Schlüssel. Der letzte erfolgreiche Kurs wird zusätzlich dauerhaft in der lokalen Dashboard-Datenbank gespeichert. Bei einem späteren Abrufproblem oder einem Neustart bleibt dadurch mindestens dieser letzte Stand sichtbar. Der Raspberry Pi benötigt ausgehenden HTTPS-Zugriff auf `www.boerse-frankfurt.de`, `api.live.deutsche-boerse.com` und `api.kraken.com`.
+Aktienkurse kommen bevorzugt von **Börse Frankfurt/Xetra**, Kryptokurse bevorzugt von **Kraken**. Falls die jeweilige Hauptquelle einen Wert nicht liefert, versucht das Dashboard automatisch **Yahoo Finance**. Fremdwährungen aus dem Yahoo-Abruf werden vor der Anzeige in Euro umgerechnet. Der letzte erfolgreiche Kurs wird zusätzlich dauerhaft in der lokalen Dashboard-Datenbank gespeichert. Bei einem späteren Abrufproblem oder einem Neustart bleibt dadurch mindestens dieser letzte Stand sichtbar. Es wird kein API-Schlüssel benötigt. Der Raspberry Pi benötigt ausgehenden HTTPS-Zugriff auf `www.boerse-frankfurt.de`, `api.live.deutsche-boerse.com`, `api.kraken.com`, `query1.finance.yahoo.com` und `query2.finance.yahoo.com`.
 
 ### Mensa
 

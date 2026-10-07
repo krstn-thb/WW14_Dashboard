@@ -15,6 +15,7 @@ from app.sources import (
     _expand_recurring_events,
     _parse_mensa_menu,
     _weather_description,
+    _yahoo_quote_in_euro,
     get_departures,
     get_stocks,
     get_weather,
@@ -208,7 +209,11 @@ def test_failed_market_item_does_not_hide_other_selections(monkeypatch) -> None:
             "status": "live",
         }
 
+    async def fake_yahoo(item: dict):
+        raise RuntimeError(f"Yahoo kennt {item['symbol']} ebenfalls nicht")
+
     monkeypatch.setattr("app.sources._fetch_boerse_stock", fake_fetch)
+    monkeypatch.setattr("app.sources._fetch_yahoo_market", fake_yahoo)
     result = asyncio.run(
         get_stocks(
             {
@@ -243,6 +248,7 @@ def test_all_failed_market_items_remain_visible(monkeypatch) -> None:
         raise RuntimeError(f"Kein Kurs für {item['symbol']}")
 
     monkeypatch.setattr("app.sources._fetch_boerse_stock", fake_fetch)
+    monkeypatch.setattr("app.sources._fetch_yahoo_market", fake_fetch)
     result = asyncio.run(
         get_stocks(
             {
@@ -271,6 +277,7 @@ def test_saved_market_quote_is_used_after_restart_style_failure(monkeypatch) -> 
         raise RuntimeError(f"Abruf für {item['symbol']} fehlgeschlagen")
 
     monkeypatch.setattr("app.sources._fetch_boerse_stock", fake_fetch)
+    monkeypatch.setattr("app.sources._fetch_yahoo_market", fake_fetch)
     result = asyncio.run(
         get_stocks(
             {
@@ -302,6 +309,69 @@ def test_saved_market_quote_is_used_after_restart_style_failure(monkeypatch) -> 
     assert result["status"] == "stale"
     assert result["items"][0]["price"] == 123.45
     assert result["items"][0]["status"] == "stale"
+
+
+def test_yahoo_is_used_when_boerse_frankfurt_fails(monkeypatch) -> None:
+    async def failed_primary(item: dict):
+        raise RuntimeError("Börse Frankfurt antwortet nicht")
+
+    async def yahoo_fallback(item: dict):
+        return {
+            **item,
+            "price": 88.0,
+            "change_percent": 1.5,
+            "currency": "EUR",
+            "points": [86.0, 88.0],
+            "source": "yahoo",
+            "status": "live",
+        }
+
+    monkeypatch.setattr("app.sources._fetch_boerse_stock", failed_primary)
+    monkeypatch.setattr("app.sources._fetch_yahoo_market", yahoo_fallback)
+    result = asyncio.run(
+        get_stocks(
+            {
+                "stocks": {
+                    "enabled": True,
+                    "provider": "boerse_frankfurt",
+                    "symbols": [
+                        {
+                            "symbol": "YAHOO-FALLBACK",
+                            "label": "Fallback-Aktie",
+                            "asset_type": "stock",
+                        }
+                    ],
+                }
+            }
+        )
+    )
+
+    assert result["status"] == "live"
+    assert result["message"] == "Yahoo"
+    assert result["items"][0]["price"] == 88.0
+
+
+def test_yahoo_quote_is_converted_to_euro(monkeypatch) -> None:
+    async def exchange_rate(symbol: str):
+        assert symbol == "ZZZEUR=X"
+        return {"price": 0.5, "currency": "EUR", "points": [0.5]}
+
+    monkeypatch.setattr("app.sources._fetch_yahoo_quote", exchange_rate)
+    converted = asyncio.run(
+        _yahoo_quote_in_euro(
+            {
+                "price": 100.0,
+                "previous_close": 90.0,
+                "currency": "ZZZ",
+                "points": [90.0, 100.0],
+            }
+        )
+    )
+
+    assert converted["price"] == 50.0
+    assert converted["previous_close"] == 45.0
+    assert converted["points"] == [45.0, 50.0]
+    assert converted["currency"] == "EUR"
 
 
 def test_market_quote_is_persisted_in_database(tmp_path: Path) -> None:
