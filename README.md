@@ -1,6 +1,6 @@
 # WW14 Dashboard
 
-Vollbild-Dashboard für einen Raspberry Pi 5. Es bündelt Loxone-Klimadaten aus InfluxDB, Journal- und Konferenz-Deadlines, wichtige Kalendertermine, RE1-Echtzeitabfahrten, Aktien- und Kryptokurse, den Mensa-Speiseplan und eine gemeinsame To-do-Liste.
+Vollbild-Dashboard für einen Raspberry Pi 5. Es bündelt Loxone-Klimadaten aus InfluxDB, Journal- und Konferenz-Deadlines, wichtige Kalendertermine, lokale und überregionale Nachrichten, RE1-Echtzeitabfahrten, Aktien- und Kryptokurse, den Mensa-Speiseplan und eine gemeinsame To-do-Liste.
 
 Das Projekt ist bewusst schlank aufgebaut: Ein Python-Dienst liefert Daten und Oberfläche, Chromium zeigt sie im Vollbildmodus. Auf dem Raspberry Pi ist kein KI-Agent notwendig.
 
@@ -14,6 +14,7 @@ Das Projekt ist bewusst schlank aufgebaut: Ein Python-Dienst liefert Daten und O
 - Deadlines und einmalige oder wiederkehrende Termine direkt im Dashboard eintragen und löschen
 - RE1-Abfahrten ab Brandenburg Hbf Richtung Magdeburg und Berlin inklusive Verspätungen, Ausfällen und Gleisen
 - frei wählbarer Wetterort mit Tagesverlauf und animierter DWD-Regenvorschau für die nächsten zwei Stunden
+- eigene Nachrichten-Slide mit lokalen Meldungen aus Brandenburg und überregionalen Nachrichten
 - Aktien- und Kryptokurse mit Suche, Hinzufügen und Entfernen; alle Preise werden in Euro angezeigt
 - werktäglich automatisch geladener Speiseplan der Mensa Brandenburg an der Havel
 - persistente To-do-Liste in SQLite
@@ -129,6 +130,12 @@ Die Slide **RE1 Abfahrten** zeigt die nächsten Züge ab Brandenburg Hbf getrenn
 
 Quelle, Bahnhof und Anzahl lassen sich unter `departures` in `config/dashboard.yaml` anpassen. Für die normale Installation ist keine zusätzliche Einrichtung nötig. Der Raspberry Pi benötigt ausgehenden HTTPS-Zugriff auf `dbf.finalrewind.org`. Der Dienst wird höchstens einmal pro Minute abgefragt.
 
+### Nachrichten
+
+Die Nachrichten-Slide zeigt lokale Meldungen von [Meetingpoint Brandenburg](https://meetingpoint-brandenburg.de/) und überregionale Nachrichten aus dem offiziellen [Tagesschau-RSS-Feed](https://www.tagesschau.de/infoservices/rssfeeds). Eine Meldung kann angeklickt werden, um den vollständigen Artikel bei der jeweiligen Quelle zu öffnen. Werbung auf Meetingpoint wird nicht übernommen.
+
+Die Quellen werden getrennt geladen und bis zu sechs Stunden zwischengespeichert. Ist eine Quelle kurzzeitig nicht erreichbar, bleibt die andere sichtbar; für eine zuvor erfolgreich geladene Quelle wird der letzte Stand angezeigt. Die Auswahl und Abrufintervalle können unter `news` in `config/dashboard.yaml` geändert werden. Es ist kein API-Schlüssel nötig. Der Raspberry Pi benötigt ausgehenden HTTPS-Zugriff auf `meetingpoint-brandenburg.de` und `www.tagesschau.de`.
+
 ### Aktien und Kryptowährungen
 
 Vonovia (`VNA.DE`) ist standardmäßig die erste Aktie. Über **+** im Märkte-Feld kann nach einem Unternehmen, einer Kryptowährung oder einem Kürzel gesucht werden. Ein Treffer wird per Klick hinzugefügt; ausgewählte Werte lassen sich im selben Fenster wieder entfernen.
@@ -174,6 +181,7 @@ FastAPI-Dashboard ─── SQLite (To-do und lokale Auswahl)
         ├──────────── SQLite (Deadlines, Termine und To-dos)
         ├──────────── Open-Meteo (Wetter)
         ├──────────── DBF/HAFAS (RE1-Echtzeitabfahrten)
+        ├──────────── Meetingpoint und Tagesschau (Nachrichten)
         ├──────────── Marktdatenanbieter (Aktien, Krypto und EUR-Wechselkurse)
         └──────────── iMensa (Mensa-Speiseplan)
 ```

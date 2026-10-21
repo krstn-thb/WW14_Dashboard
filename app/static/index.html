@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#071311" />
     <title>WW14 Dashboard</title>
-    <link rel="stylesheet" href="/styles.css?v=20261005-3" />
+    <link rel="stylesheet" href="/styles.css?v=20261021-1" />
   </head>
   <body>
     <div class="ambient ambient-one" aria-hidden="true"></div>
@@ -69,6 +69,37 @@
             </div>
           </div>
           <div id="weather-content" class="weather-content loading-block"></div>
+        </article>
+
+        <article class="panel dashboard-slide news-panel" data-slide-title="Nachrichten" aria-hidden="true">
+          <div class="panel-heading">
+            <div>
+              <span class="eyebrow">Aktuell · Lokal & Deutschland</span>
+              <h2>Nachrichten</h2>
+              <p id="news-updated" class="slide-subtitle">Neueste Meldungen</p>
+            </div>
+            <span id="news-state" class="source-state">Lädt …</span>
+          </div>
+          <div class="news-layout">
+            <section class="news-column news-column--local">
+              <div class="news-section-heading">
+                <div><span class="news-section-marker"></span><div><span class="eyebrow">Vor Ort</span><h3>Brandenburg</h3></div></div>
+                <span>Meetingpoint</span>
+              </div>
+              <div id="news-local-content" class="news-local-list loading-block"></div>
+            </section>
+            <section class="news-column news-column--national">
+              <div class="news-section-heading">
+                <div><span class="news-section-marker"></span><div><span class="eyebrow">Überregional</span><h3>Deutschland</h3></div></div>
+                <span>Tagesschau</span>
+              </div>
+              <div id="news-national-content" class="news-national-list loading-block"></div>
+            </section>
+          </div>
+          <div class="panel-footer">
+            <span id="news-message">Nachrichten werden geladen</span>
+            <span>Zum Lesen Meldung anklicken</span>
+          </div>
         </article>
 
         <article class="panel dashboard-slide departures-panel" data-slide-title="RE1 Abfahrten" aria-hidden="true">
@@ -287,7 +318,7 @@
     </dialog>
 
     <div id="toast" class="toast" role="alert" aria-live="assertive"></div>
-    <script src="/app.js?v=20261006-1" defer></script>
+    <script src="/app.js?v=20261021-1" defer></script>
   </body>
 </html>
 

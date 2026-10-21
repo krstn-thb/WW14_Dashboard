@@ -14,10 +14,13 @@ from app.sources import (
     _crypto_display_symbol,
     _expand_recurring_events,
     _fetch_yahoo_market,
+    _parse_meetingpoint_news,
     _parse_mensa_menu,
+    _parse_news_feed,
     _weather_description,
     _yahoo_quote_in_euro,
     get_departures,
+    get_news,
     get_stocks,
     get_weather,
 )
@@ -82,6 +85,7 @@ def test_health_and_dashboard(tmp_path: Path) -> None:
     assert dashboard.json()["climate"]["status"] == "demo"
     assert dashboard.json()["weather"]["status"] == "disabled"
     assert dashboard.json()["mensa"]["status"] == "disabled"
+    assert dashboard.json()["news"]["status"] == "disabled"
     assert dashboard.json()["deadlines"]["items"][0]["title"] == "Test deadline"
 
 
@@ -524,6 +528,96 @@ def test_live_crypto_collection_uses_kraken(monkeypatch) -> None:
     assert result["status"] == "live"
     assert result["items"][0]["price"] == 42.0
     assert result["items"][0]["provider"] == "kraken"
+
+
+def test_meetingpoint_parser_extracts_news_and_skips_advertisements() -> None:
+    content = """
+    <main>
+      <article class="tile">
+        <div class="tile-meta">07:30 <span>· Politik · red</span></div>
+        <h2><a class="tile-link" href="/artikel/neue-meldung">Neue Meldung</a></h2>
+        <div class="tile-teaser"><span class="teaser-html"><p>Ein kurzer Teaser.</p></span> … mehr</div>
+      </article>
+      <article class="tile">
+        <div class="tile-meta-k"><span class="badge-k">ANZEIGE</span></div>
+        <h2><a class="tile-link" href="/artikel/werbung">Werbung</a></h2>
+      </article>
+    </main>
+    """
+
+    items = _parse_meetingpoint_news(content, "https://meetingpoint-brandenburg.de/")
+
+    assert len(items) == 1
+    assert items[0]["title"] == "Neue Meldung"
+    assert items[0]["url"] == "https://meetingpoint-brandenburg.de/artikel/neue-meldung"
+    assert items[0]["category"] == "Politik"
+    assert items[0]["summary"] == "Ein kurzer Teaser."
+
+
+def test_news_feed_parser_supports_rss() -> None:
+    content = """<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0"><channel><item>
+      <title>Nachricht &amp; Analyse</title>
+      <link>https://example.org/nachricht</link>
+      <description><![CDATA[<p>Zusammenfassung der Meldung.</p>]]></description>
+      <pubDate>Wed, 21 Oct 2026 08:15:00 +0200</pubDate>
+      <category>Inland</category>
+    </item></channel></rss>"""
+
+    items = _parse_news_feed(content, "Tagesschau")
+
+    assert len(items) == 1
+    assert items[0]["title"] == "Nachricht & Analyse"
+    assert items[0]["summary"] == "Zusammenfassung der Meldung."
+    assert items[0]["published_at"] == "2026-10-21T06:15:00+00:00"
+    assert items[0]["source"] == "Tagesschau"
+
+
+def test_news_source_keeps_working_when_one_source_fails(monkeypatch) -> None:
+    class Response:
+        def __init__(self, url: str) -> None:
+            self.url = url
+            self.text = (
+                '<rss><channel><item><title>Deutschland-Meldung</title>'
+                '<link>https://example.org/deutschland</link></item></channel></rss>'
+            )
+
+        def raise_for_status(self) -> None:
+            return None
+
+    class Client:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args) -> None:
+            return None
+
+        async def get(self, url, **kwargs):
+            if "meetingpoint" in url:
+                raise RuntimeError("lokale Quelle offline")
+            return Response(url)
+
+    monkeypatch.setattr("app.sources.httpx.AsyncClient", Client)
+    result = asyncio.run(
+        get_news(
+            {
+                "news": {
+                    "enabled": True,
+                    "meetingpoint_url": "https://meetingpoint.test/unique-partial",
+                    "national_feeds": [
+                        {"name": "Test", "url": "https://example.org/unique-feed.xml"}
+                    ],
+                }
+            }
+        )
+    )
+
+    assert result["status"] == "partial"
+    assert result["local"] == []
+    assert result["national"][0]["title"] == "Deutschland-Meldung"
 
 
 def test_mensa_menu_parser_extracts_meals() -> None:

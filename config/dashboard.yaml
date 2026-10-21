@@ -93,6 +93,18 @@ weather:
   radar_retry_seconds: 120
   radar_stale_seconds: 21600
 
+news:
+  enabled: true
+  meetingpoint_url: "https://meetingpoint-brandenburg.de/"
+  national_feeds:
+    - name: Tagesschau
+      url: "https://www.tagesschau.de/index~rss2.xml"
+  local_limit: 8
+  national_limit: 8
+  cache_seconds: 600
+  retry_seconds: 180
+  stale_seconds: 21600
+
 mensa:
   enabled: true
   base_url: "https://www.imensa.de/brandenburg-an-der-havel/mensa-brandenburg-an-der-havel"

@@ -8,6 +8,8 @@ import re
 import time
 from calendar import monthrange
 from datetime import UTC, date, datetime, time as datetime_time, timedelta
+from email.utils import parsedate_to_datetime
+from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Awaitable, Callable
@@ -118,6 +120,7 @@ _market_metadata_cache = AsyncTTLCache()
 _market_search_cache = AsyncTTLCache()
 _yahoo_search_cache = AsyncTTLCache()
 _market_fx_cache = AsyncTTLCache()
+_news_cache = AsyncTTLCache()
 
 
 def _demo_series(base: float, amplitude: float, count: int = 28) -> list[dict[str, Any]]:
@@ -1427,6 +1430,308 @@ async def get_stocks(config: dict[str, Any]) -> dict[str, Any]:
             else f"Marktdaten konnten nicht abgerufen werden: {exc}",
             "items": items,
         }
+
+
+class _MeetingpointHTMLParser(HTMLParser):
+    """Extract editorial tiles from Meetingpoint's public local-news page."""
+
+    _void_tags = {
+        "area", "base", "br", "col", "embed", "hr", "img", "input", "link",
+        "meta", "param", "source", "track", "wbr",
+    }
+
+    def __init__(self, base_url: str) -> None:
+        super().__init__(convert_charrefs=True)
+        self.base_url = base_url
+        self.items: list[dict[str, Any]] = []
+        self._depth = 0
+        self._article_depth: int | None = None
+        self._current: dict[str, Any] | None = None
+        self._capture: tuple[str, int, str] | None = None
+
+    @staticmethod
+    def _attributes(attrs: list[tuple[str, str | None]]) -> dict[str, str]:
+        return {name: value or "" for name, value in attrs}
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag not in self._void_tags:
+            self._depth += 1
+        attributes = self._attributes(attrs)
+        classes = set(attributes.get("class", "").split())
+        if tag == "article" and "tile" in classes and self._current is None:
+            self._article_depth = self._depth
+            self._current = {
+                "title_parts": [],
+                "meta_parts": [],
+                "teaser_parts": [],
+                "url": "",
+                "advertisement": False,
+            }
+            return
+        if self._current is None:
+            return
+        if "tile-meta-k" in classes or "badge-k" in classes:
+            self._current["advertisement"] = True
+        if tag == "a" and "tile-link" in classes:
+            self._current["url"] = urljoin(self.base_url, attributes.get("href", ""))
+            self._capture = ("title_parts", self._depth, tag)
+        elif "tile-meta" in classes and "tile-meta-k" not in classes:
+            self._capture = ("meta_parts", self._depth, tag)
+        elif (
+            ("tile-teaser" in classes or "teaser-html" in classes)
+            and (self._capture is None or self._capture[0] != "teaser_parts")
+        ):
+            self._capture = ("teaser_parts", self._depth, tag)
+
+    def handle_data(self, data: str) -> None:
+        if self._current is None:
+            return
+        text = " ".join(data.split())
+        if not text:
+            return
+        if text.upper() == "ANZEIGE":
+            self._current["advertisement"] = True
+        if self._capture:
+            self._current[self._capture[0]].append(text)
+
+    def handle_endtag(self, tag: str) -> None:
+        if (
+            self._current is not None
+            and tag == "article"
+            and self._article_depth == self._depth
+        ):
+            self._finish_article()
+        elif self._capture and self._capture[1:] == (self._depth, tag):
+            self._capture = None
+        if tag not in self._void_tags:
+            self._depth = max(0, self._depth - 1)
+
+    def _finish_article(self) -> None:
+        assert self._current is not None
+        title = " ".join(self._current["title_parts"]).strip()
+        url = str(self._current["url"]).strip()
+        meta = " ".join(self._current["meta_parts"]).strip()
+        teaser = " ".join(self._current["teaser_parts"]).strip()
+        teaser = re.sub(r"(?:…|\.\.\.)?\s*mehr\s*$", "", teaser, flags=re.IGNORECASE).strip()
+        meta_parts = [part.strip() for part in meta.split("·") if part.strip()]
+        if title and url and not self._current["advertisement"]:
+            self.items.append(
+                {
+                    "title": title,
+                    "summary": teaser[:360],
+                    "url": url,
+                    "source": "Meetingpoint Brandenburg",
+                    "time_label": meta_parts[0] if meta_parts else "",
+                    "category": meta_parts[1] if len(meta_parts) > 1 else "Lokal",
+                    "published_at": None,
+                }
+            )
+        self._current = None
+        self._capture = None
+        self._article_depth = None
+
+
+def _parse_meetingpoint_news(content: str, base_url: str) -> list[dict[str, Any]]:
+    parser = _MeetingpointHTMLParser(base_url)
+    parser.feed(content)
+    parser.close()
+    return parser.items
+
+
+def _xml_child(element: ElementTree.Element, *names: str) -> ElementTree.Element | None:
+    expected = set(names)
+    for child in element:
+        if child.tag.rsplit("}", 1)[-1] in expected:
+            return child
+    return None
+
+
+def _plain_news_text(value: str) -> str:
+    return " ".join(unescape(re.sub(r"<[^>]+>", " ", value)).split())
+
+
+def _parse_news_feed(content: str, source_name: str) -> list[dict[str, Any]]:
+    root = ElementTree.fromstring(content)
+    entries = [
+        element
+        for element in root.iter()
+        if element.tag.rsplit("}", 1)[-1] in {"item", "entry"}
+    ]
+    items: list[dict[str, Any]] = []
+    for entry in entries:
+        title_node = _xml_child(entry, "title")
+        link_node = _xml_child(entry, "link")
+        summary_node = _xml_child(entry, "description", "summary", "content")
+        published_node = _xml_child(entry, "pubDate", "published", "updated")
+        category_node = _xml_child(entry, "category")
+        title = _plain_news_text("".join(title_node.itertext())) if title_node is not None else ""
+        link = ""
+        if link_node is not None:
+            link = (link_node.get("href") or "".join(link_node.itertext())).strip()
+        summary = (
+            _plain_news_text("".join(summary_node.itertext()))
+            if summary_node is not None
+            else ""
+        )
+        published_at = None
+        time_label = ""
+        if published_node is not None:
+            raw_date = "".join(published_node.itertext()).strip()
+            try:
+                parsed = parsedate_to_datetime(raw_date)
+            except (TypeError, ValueError):
+                try:
+                    parsed = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+                except ValueError:
+                    parsed = None
+            if parsed is not None:
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=UTC)
+                published_at = parsed.astimezone(UTC).isoformat()
+        category = ""
+        if category_node is not None:
+            category = _plain_news_text(
+                category_node.get("term") or "".join(category_node.itertext())
+            )
+        if title and link:
+            items.append(
+                {
+                    "title": title,
+                    "summary": summary[:360],
+                    "url": link,
+                    "source": source_name,
+                    "time_label": time_label,
+                    "category": category,
+                    "published_at": published_at,
+                }
+            )
+    return items
+
+
+def _unique_news(items: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
+    unique: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in items:
+        key = re.sub(r"\W+", "", str(item.get("title") or "").casefold())
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        unique.append(item)
+        if len(unique) >= limit:
+            break
+    return unique
+
+
+async def get_news(config: dict[str, Any]) -> dict[str, Any]:
+    section = config.get("news", {})
+    if not section.get("enabled", False):
+        return {
+            "status": "disabled",
+            "local": [],
+            "national": [],
+            "message": "Nachrichten deaktiviert",
+        }
+
+    cache_seconds = max(120, int(section.get("cache_seconds", 600)))
+    retry_seconds = max(60, int(section.get("retry_seconds", 180)))
+    stale_seconds = max(cache_seconds, int(section.get("stale_seconds", 21600)))
+    local_url = str(section.get("meetingpoint_url") or "https://meetingpoint-brandenburg.de/")
+    feeds = section.get("national_feeds") or [
+        {
+            "name": "Tagesschau",
+            "url": "https://www.tagesschau.de/index~rss2.xml",
+        }
+    ]
+    errors: list[str] = []
+    stale_sources: list[str] = []
+    local_items: list[dict[str, Any]] = []
+    national_items: list[dict[str, Any]] = []
+
+    async def load_meetingpoint() -> list[dict[str, Any]]:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+            response = await client.get(
+                local_url,
+                headers={"User-Agent": "WW14-Dashboard/1.0", "Accept": "text/html"},
+            )
+            response.raise_for_status()
+        items = _parse_meetingpoint_news(response.text, str(response.url))
+        if not items:
+            raise ValueError("keine lokalen Meldungen gefunden")
+        return items
+
+    try:
+        local_items, stale = await _news_cache.get_or_load_with_stale(
+            f"news:meetingpoint:{local_url}",
+            cache_seconds,
+            stale_seconds,
+            retry_seconds,
+            load_meetingpoint,
+        )
+        if stale:
+            stale_sources.append("Meetingpoint")
+    except Exception as exc:
+        errors.append(f"Meetingpoint: {exc}")
+
+    for feed in feeds:
+        if not isinstance(feed, dict) or not feed.get("url"):
+            continue
+        name = str(feed.get("name") or "Nachrichten")
+        url = str(feed["url"])
+
+        async def load_feed(feed_url: str = url, feed_name: str = name) -> list[dict[str, Any]]:
+            async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+                response = await client.get(
+                    feed_url,
+                    headers={
+                        "User-Agent": "WW14-Dashboard/1.0",
+                        "Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml",
+                    },
+                )
+                response.raise_for_status()
+            items = _parse_news_feed(response.text, feed_name)
+            if not items:
+                raise ValueError("keine Meldungen im Feed gefunden")
+            return items
+
+        try:
+            feed_items, stale = await _news_cache.get_or_load_with_stale(
+                f"news:feed:{url}",
+                cache_seconds,
+                stale_seconds,
+                retry_seconds,
+                load_feed,
+            )
+            national_items.extend(feed_items)
+            if stale:
+                stale_sources.append(name)
+        except Exception as exc:
+            errors.append(f"{name}: {exc}")
+
+    local_items = _unique_news(local_items, max(1, int(section.get("local_limit", 8))))
+    national_items = _unique_news(
+        national_items, max(1, int(section.get("national_limit", 8)))
+    )
+    has_items = bool(local_items or national_items)
+    if not has_items:
+        status = "error"
+        message = "Nachrichten konnten nicht geladen werden"
+    elif errors:
+        status = "partial"
+        message = "Eine Nachrichtenquelle ist vorübergehend nicht erreichbar"
+    elif stale_sources:
+        status = "stale"
+        message = "Letzter erfolgreicher Nachrichtenstand"
+    else:
+        status = "live"
+        message = "Meetingpoint Brandenburg · Tagesschau"
+    return {
+        "status": status,
+        "local": local_items,
+        "national": national_items,
+        "message": message,
+        "updated_at": datetime.now(UTC).isoformat(),
+        "errors": errors,
+    }
 
 
 class _MensaHTMLParser(HTMLParser):

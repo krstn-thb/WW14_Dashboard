@@ -21,6 +21,7 @@ from app.sources import (
     get_departures,
     get_events,
     get_mensa,
+    get_news,
     get_stocks,
     get_weather,
     search_stocks,
@@ -230,7 +231,7 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
                     "timezone": weather_location["timezone"],
                 }
             )
-        climate, deadlines, events, departures, stocks, weather, mensa = await asyncio.gather(
+        climate, deadlines, events, departures, stocks, weather, mensa, news = await asyncio.gather(
             get_climate(source_config),
             get_deadlines(source_config, timezone),
             get_events(source_config, timezone),
@@ -238,6 +239,7 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
             get_stocks(source_config),
             get_weather(source_config),
             get_mensa(source_config),
+            get_news(source_config),
         )
         if stocks.get("status") in {"live", "partial"}:
             await asyncio.to_thread(store.save_market_quotes, stocks.get("items", []))
@@ -259,6 +261,7 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
             "stocks": stocks,
             "weather": weather,
             "mensa": mensa,
+            "news": news,
             "todos": todos,
         }
 

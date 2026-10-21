@@ -434,6 +434,44 @@ function renderWeather(weather) {
   if (weather.status === "error" && weather.message) showToast(weather.message);
 }
 
+function newsMeta(item) {
+  const published = item.published_at
+    ? formatDate(item.published_at, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
+    : item.time_label || "Aktuell";
+  return [item.category, published].filter(Boolean).map(escapeHtml).join(" · ");
+}
+
+function renderNews(news) {
+  sourceState($("#news-state"), news.status);
+  $("#news-updated").textContent = news.updated_at
+    ? `Stand ${formatDate(news.updated_at, { hour: "2-digit", minute: "2-digit" })}`
+    : "Neueste Meldungen";
+  $("#news-message").textContent = news.message || "Meetingpoint Brandenburg · Tagesschau";
+
+  const localTarget = $("#news-local-content");
+  const localItems = (news.local || []).slice(0, 5);
+  localTarget.innerHTML = localItems.length
+    ? localItems.map((item, index) => `<a class="news-card ${index === 0 ? "news-card--lead" : ""}" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">
+      <span class="news-card-meta">${newsMeta(item)}</span>
+      <h4>${escapeHtml(item.title)}</h4>
+      ${item.summary ? `<p>${escapeHtml(item.summary)}</p>` : ""}
+      <span class="news-card-source">${escapeHtml(item.source || "Meetingpoint Brandenburg")} <b aria-hidden="true">↗</b></span>
+    </a>`).join("")
+    : '<div class="empty">Zurzeit keine lokalen Meldungen verfügbar.</div>';
+  localTarget.classList.remove("loading-block");
+
+  const nationalTarget = $("#news-national-content");
+  const nationalItems = (news.national || []).slice(0, 6);
+  nationalTarget.innerHTML = nationalItems.length
+    ? nationalItems.map((item) => `<a class="news-card news-card--compact" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">
+      <span class="news-card-meta">${newsMeta(item)}</span>
+      <h4>${escapeHtml(item.title)}</h4>
+      <span class="news-card-source">${escapeHtml(item.source || "Tagesschau")} <b aria-hidden="true">↗</b></span>
+    </a>`).join("")
+    : '<div class="empty">Zurzeit keine überregionalen Meldungen verfügbar.</div>';
+  nationalTarget.classList.remove("loading-block");
+}
+
 function renderMensa(mensa) {
   const status = $("#mensa-state");
   sourceState(status, mensa.status);
@@ -575,6 +613,7 @@ async function loadDashboard() {
     renderDepartures(data.departures || { status: "disabled", directions: {} });
     renderStocks(data.stocks);
     renderWeather(data.weather || { status: "disabled", daily: [] });
+    renderNews(data.news || { status: "disabled", local: [], national: [] });
     renderMensa(data.mensa || { status: "disabled", items: [] });
     renderTodos(data.todos);
     const connection = $("#connection");
