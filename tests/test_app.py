@@ -82,15 +82,36 @@ def test_health_and_dashboard(tmp_path: Path) -> None:
 
     assert health.status_code == 200
     assert health.json()["status"] == "ok"
+    assert health.headers["cache-control"] == "no-store"
+    assert health.json()["revision"]
+    instance_id = health.json()["instance_id"]
+    assert instance_id
     assert dashboard.status_code == 200
     assert dashboard.json()["settings"]["title"] == "Test Dashboard"
+    assert dashboard.json()["settings"]["instance_id"] == instance_id
+    assert dashboard.json()["settings"]["revision"] == health.json()["revision"]
     assert dashboard.json()["climate"]["status"] == "demo"
     assert dashboard.json()["weather"]["status"] == "disabled"
     assert dashboard.json()["mensa"]["status"] == "disabled"
     assert dashboard.json()["news"]["status"] == "disabled"
     assert dashboard.json()["deadlines"]["items"][0]["title"] == "Test deadline"
     assert 'data-slide-title="Nachrichten"' in page.text
+    assert f'/styles.css?v={instance_id}' in page.text
+    assert f'/app.js?v={instance_id}' in page.text
+    assert f'<meta name="dashboard-instance" content="{instance_id}" />' in page.text
+    assert "__DASHBOARD_INSTANCE__" not in page.text
     assert page.headers["cache-control"] == "no-store"
+
+
+def test_index_alias_uses_same_instance_and_no_cache(tmp_path: Path) -> None:
+    app = create_app(make_config(tmp_path))
+    with TestClient(app) as client:
+        root = client.get("/")
+        index = client.get("/index.html")
+
+    assert index.status_code == 200
+    assert index.text == root.text
+    assert index.headers["cache-control"] == "no-store"
 
 
 def test_todo_lifecycle(tmp_path: Path) -> None:

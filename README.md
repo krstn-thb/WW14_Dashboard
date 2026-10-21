@@ -71,6 +71,10 @@ git pull
 systemctl --user restart ww14-dashboard
 ```
 
+Die Dashboard-Adresse bleibt immer `http://IP-DES-PI:8080` (direkt auf dem Pi: `http://127.0.0.1:8080`). Ein Versionsanhang an der Adresse ist nicht nötig. Nach dem Neustart des Dienstes erkennt ein mit dieser Version geöffneter Dashboard-Tab die neue Version innerhalb von etwa 15 Sekunden und lädt sich automatisch neu. Bei der erstmaligen Umstellung auf diese Version den Browser einmal manuell neu laden oder den Pi neu starten. `git pull` allein ersetzt den laufenden Python-Prozess nicht; deshalb gehört der Dienstneustart zum Update.
+
+Welche Version auf Port 8080 tatsächlich läuft, zeigt `curl -s http://127.0.0.1:8080/api/health` im Feld `revision`. Dieser Wert sollte mit `git rev-parse --short HEAD` übereinstimmen.
+
 ## Konfiguration
 
 Die sichtbaren Inhalte stehen in `config/dashboard.yaml`. Zugangsdaten gehören in `.env` und werden nicht in Git gespeichert.

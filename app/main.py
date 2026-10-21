@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import subprocess
+import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -10,6 +12,7 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response, status
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -154,6 +157,20 @@ def _local_iso(value: datetime, timezone: ZoneInfo) -> str:
     return value.astimezone(timezone).isoformat()
 
 
+def _source_revision() -> str:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(ROOT_DIR), "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return "unknown"
+    return result.stdout.strip() if result.returncode == 0 else "unknown"
+
+
 def create_app(config_path: str | Path | None = None) -> FastAPI:
     config = load_config(config_path)
     database_path = resolve_project_path(
@@ -189,17 +206,31 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
     )
     application.state.config = config
     application.state.todo_store = store
+    application.state.revision = _source_revision()
+    application.state.instance_id = uuid.uuid4().hex[:12]
 
     @application.middleware("http")
     async def prevent_stale_dashboard_files(request: Request, call_next):
         response = await call_next(request)
-        if request.url.path in {"/", "/index.html", "/app.js", "/styles.css"}:
+        if request.url.path in {"/", "/index.html", "/app.js", "/styles.css", "/api/health"}:
             response.headers["Cache-Control"] = "no-store"
         return response
 
+    @application.get("/", response_class=HTMLResponse, include_in_schema=False)
+    @application.get("/index.html", response_class=HTMLResponse, include_in_schema=False)
+    async def index() -> HTMLResponse:
+        template = (ROOT_DIR / "app" / "static" / "index.html").read_text(encoding="utf-8")
+        html = template.replace("__DASHBOARD_INSTANCE__", application.state.instance_id)
+        return HTMLResponse(html, headers={"Cache-Control": "no-store"})
+
     @application.get("/api/health")
     async def health() -> dict[str, str]:
-        return {"status": "ok", "time": datetime.now(UTC).isoformat()}
+        return {
+            "status": "ok",
+            "time": datetime.now(UTC).isoformat(),
+            "revision": application.state.revision,
+            "instance_id": application.state.instance_id,
+        }
 
     @application.get("/api/dashboard")
     async def dashboard(response: Response) -> dict[str, Any]:
@@ -260,6 +291,8 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
                 "refresh_seconds": int(dashboard_config.get("refresh_seconds", 60)),
                 "locale": dashboard_config.get("locale", "de-DE"),
                 "timezone": str(timezone),
+                "revision": application.state.revision,
+                "instance_id": application.state.instance_id,
             },
             "climate": climate,
             "deadlines": deadlines,

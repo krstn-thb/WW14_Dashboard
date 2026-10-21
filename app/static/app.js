@@ -3,6 +3,9 @@ const state = {
   timezone: "Europe/Berlin",
   refreshSeconds: 60,
   refreshTimer: null,
+  appInstance: document.querySelector('meta[name="dashboard-instance"]')?.content || null,
+  versionTimer: null,
+  reloading: false,
   radarTimer: null,
   radarFrames: [],
   radarOrigin: null,
@@ -600,6 +603,13 @@ async function loadDashboard() {
   window.clearTimeout(state.refreshTimer);
   try {
     const data = await request("/api/dashboard");
+    const appInstance = data.settings.instance_id;
+    if (state.appInstance && appInstance && state.appInstance !== appInstance) {
+      state.reloading = true;
+      window.location.reload();
+      return;
+    }
+    state.appInstance = appInstance || state.appInstance;
     state.locale = data.settings.locale || state.locale;
     state.timezone = data.settings.timezone || state.timezone;
     state.refreshSeconds = Math.max(15, Number(data.settings.refresh_seconds) || 60);
@@ -625,7 +635,22 @@ async function loadDashboard() {
     connection.lastElementChild.textContent = "Offline";
     showToast(`Dashboard konnte nicht aktualisiert werden: ${error.message}`);
   } finally {
-    state.refreshTimer = window.setTimeout(loadDashboard, state.refreshSeconds * 1000);
+    if (!state.reloading) state.refreshTimer = window.setTimeout(loadDashboard, state.refreshSeconds * 1000);
+  }
+}
+
+async function checkAppVersion() {
+  try {
+    const health = await request("/api/health", { cache: "no-store" });
+    if (state.appInstance && health.instance_id !== state.appInstance) {
+      state.reloading = true;
+      window.location.reload();
+      return;
+    }
+  } catch (_) {
+    // Bei einem Dienstneustart kurzzeitig offline; beim nächsten Versuch erneut prüfen.
+  } finally {
+    if (!state.reloading) state.versionTimer = window.setTimeout(checkAppVersion, 15000);
   }
 }
 
@@ -1134,4 +1159,5 @@ setInterval(updateClock, 1000);
 updateClock();
 initializeSlides();
 loadDashboard();
+state.versionTimer = window.setTimeout(checkAppVersion, 15000);
 
