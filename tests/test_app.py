@@ -77,6 +77,7 @@ def test_health_and_dashboard(tmp_path: Path) -> None:
     with TestClient(app) as client:
         health = client.get("/api/health")
         dashboard = client.get("/api/dashboard")
+        page = client.get("/")
 
     assert health.status_code == 200
     assert health.json()["status"] == "ok"
@@ -87,6 +88,8 @@ def test_health_and_dashboard(tmp_path: Path) -> None:
     assert dashboard.json()["mensa"]["status"] == "disabled"
     assert dashboard.json()["news"]["status"] == "disabled"
     assert dashboard.json()["deadlines"]["items"][0]["title"] == "Test deadline"
+    assert 'data-slide-title="Nachrichten"' in page.text
+    assert page.headers["cache-control"] == "no-store"
 
 
 def test_todo_lifecycle(tmp_path: Path) -> None:

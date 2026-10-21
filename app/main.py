@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import FastAPI, HTTPException, Query, Response, status
+from fastapi import FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -189,6 +189,13 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
     )
     application.state.config = config
     application.state.todo_store = store
+
+    @application.middleware("http")
+    async def prevent_stale_dashboard_files(request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path in {"/", "/index.html", "/app.js", "/styles.css"}:
+            response.headers["Cache-Control"] = "no-store"
+        return response
 
     @application.get("/api/health")
     async def health() -> dict[str, str]:

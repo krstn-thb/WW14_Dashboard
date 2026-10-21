@@ -10,6 +10,12 @@ if [[ -f "$PROJECT_DIR/.env" ]]; then
 fi
 
 TARGET_URL="${DASHBOARD_URL:-http://127.0.0.1:8080}"
+VERSION="$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || date +%s)"
+if [[ "$TARGET_URL" == *\?* ]]; then
+  KIOSK_URL="${TARGET_URL}&v=${VERSION}"
+else
+  KIOSK_URL="${TARGET_URL}?v=${VERSION}"
+fi
 
 for _ in $(seq 1 60); do
   if curl --silent --fail --max-time 2 "$TARGET_URL/api/health" >/dev/null 2>&1; then
@@ -33,5 +39,5 @@ exec "$BROWSER" \
   --disable-infobars \
   --disable-session-crashed-bubble \
   --check-for-update-interval=31536000 \
-  "$TARGET_URL"
+  "$KIOSK_URL"
 
