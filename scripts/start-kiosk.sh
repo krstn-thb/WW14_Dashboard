@@ -10,6 +10,13 @@ if [[ -f "$PROJECT_DIR/.env" ]]; then
 fi
 
 TARGET_URL="${DASHBOARD_URL:-http://127.0.0.1:8080}"
+case "$TARGET_URL" in
+  http://*|https://*) ;;
+  *)
+    echo "Ungültige DASHBOARD_URL; verwende das lokale Dashboard." >&2
+    TARGET_URL="http://127.0.0.1:8080"
+    ;;
+esac
 VERSION="$(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || date +%s)"
 if [[ "$TARGET_URL" == *\?* ]]; then
   KIOSK_URL="${TARGET_URL}&v=${VERSION}"
