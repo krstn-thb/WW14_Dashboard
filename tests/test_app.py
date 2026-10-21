@@ -14,6 +14,7 @@ from app.sources import (
     _crypto_display_symbol,
     _expand_recurring_events,
     _fetch_yahoo_market,
+    _newest_news,
     _parse_meetingpoint_news,
     _parse_mensa_menu,
     _parse_news_feed,
@@ -574,6 +575,16 @@ def test_news_feed_parser_supports_rss() -> None:
     assert items[0]["summary"] == "Zusammenfassung der Meldung."
     assert items[0]["published_at"] == "2026-10-21T06:15:00+00:00"
     assert items[0]["source"] == "Tagesschau"
+
+
+def test_newest_news_sorts_by_publication_date_and_keeps_undated_last() -> None:
+    items = [
+        {"title": "Older", "published_at": "2026-10-20T08:00:00+00:00"},
+        {"title": "Undated", "published_at": None},
+        {"title": "Newest", "published_at": "2026-10-21T08:00:00+00:00"},
+    ]
+
+    assert [item["title"] for item in _newest_news(items, 2)] == ["Newest", "Older"]
 
 
 def test_news_source_keeps_working_when_one_source_fails(monkeypatch) -> None:

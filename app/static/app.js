@@ -449,21 +449,20 @@ function renderNews(news) {
   $("#news-message").textContent = news.message || "Meetingpoint Brandenburg · Tagesschau";
 
   const localTarget = $("#news-local-content");
-  const localItems = (news.local || []).slice(0, 5);
+  const localItems = (news.local || []).slice(0, 3);
   localTarget.innerHTML = localItems.length
     ? localItems.map((item, index) => `<a class="news-card ${index === 0 ? "news-card--lead" : ""}" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">
       <span class="news-card-meta">${newsMeta(item)}</span>
       <h4>${escapeHtml(item.title)}</h4>
-      ${item.summary ? `<p>${escapeHtml(item.summary)}</p>` : ""}
       <span class="news-card-source">${escapeHtml(item.source || "Meetingpoint Brandenburg")} <b aria-hidden="true">↗</b></span>
     </a>`).join("")
     : '<div class="empty">Zurzeit keine lokalen Meldungen verfügbar.</div>';
   localTarget.classList.remove("loading-block");
 
   const nationalTarget = $("#news-national-content");
-  const nationalItems = (news.national || []).slice(0, 6);
+  const nationalItems = (news.national || []).slice(0, 3);
   nationalTarget.innerHTML = nationalItems.length
-    ? nationalItems.map((item) => `<a class="news-card news-card--compact" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">
+    ? nationalItems.map((item, index) => `<a class="news-card ${index === 0 ? "news-card--lead" : ""}" href="${escapeHtml(item.url)}" target="_blank" rel="noopener">
       <span class="news-card-meta">${newsMeta(item)}</span>
       <h4>${escapeHtml(item.title)}</h4>
       <span class="news-card-source">${escapeHtml(item.source || "Tagesschau")} <b aria-hidden="true">↗</b></span>

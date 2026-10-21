@@ -101,7 +101,7 @@ news:
       url: "https://www.tagesschau.de/index~rss2.xml"
   local_limit: 8
   national_limit: 8
-  cache_seconds: 600
+  cache_seconds: 300
   retry_seconds: 180
   stale_seconds: 21600
 

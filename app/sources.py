@@ -1622,6 +1622,13 @@ def _unique_news(items: list[dict[str, Any]], limit: int) -> list[dict[str, Any]
     return unique
 
 
+def _newest_news(items: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
+    return _unique_news(
+        sorted(items, key=lambda item: item.get("published_at") or "", reverse=True),
+        limit,
+    )
+
+
 async def get_news(config: dict[str, Any]) -> dict[str, Any]:
     section = config.get("news", {})
     if not section.get("enabled", False):
@@ -1708,9 +1715,8 @@ async def get_news(config: dict[str, Any]) -> dict[str, Any]:
             errors.append(f"{name}: {exc}")
 
     local_items = _unique_news(local_items, max(1, int(section.get("local_limit", 8))))
-    national_items = _unique_news(
-        national_items, max(1, int(section.get("national_limit", 8)))
-    )
+    # Meetingpoint lists its current stories in page order; RSS items have a timestamp.
+    national_items = _newest_news(national_items, max(1, int(section.get("national_limit", 8))))
     has_items = bool(local_items or national_items)
     if not has_items:
         status = "error"
