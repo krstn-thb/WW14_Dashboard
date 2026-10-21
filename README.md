@@ -132,7 +132,7 @@ Quelle, Bahnhof und Anzahl lassen sich unter `departures` in `config/dashboard.y
 
 ### Nachrichten
 
-Die Nachrichten-Slide zeigt jeweils die drei neuesten Meldungen von [Meetingpoint Brandenburg](https://meetingpoint-brandenburg.de/) und aus dem offiziellen [Tagesschau-RSS-Feed](https://www.tagesschau.de/infoservices/rssfeeds). Eine Meldung kann angeklickt werden, um den vollständigen Artikel bei der jeweiligen Quelle zu öffnen. Werbung auf Meetingpoint wird nicht übernommen.
+Die Nachrichten-Slide zeigt jeweils die drei neuesten Meldungen von [Meetingpoint Brandenburg](https://meetingpoint-brandenburg.de/) und aus dem offiziellen [Tagesschau-RSS-Feed](https://www.tagesschau.de/infoservices/rssfeeds). Eine Meldung kann angeklickt werden, um den vollständigen Artikel bei der jeweiligen Quelle zu öffnen. Die Links stammen jeweils aus der Artikelüberschrift auf Meetingpoint bzw. dem `<link>` des RSS-Eintrags und werden auf das passende Quell-Domain geprüft. Werbung auf Meetingpoint sowie reguläre Tagesschau-Wetterseiten und das Regenradar werden nicht übernommen; Wetter-Nachrichten aus anderen Ressorts bleiben sichtbar.
 
 Das Dashboard prüft minütlich auf neue Daten und lädt die Nachrichtenquellen spätestens nach fünf Minuten erneut. Die Quellen werden getrennt geladen und bei Störungen bis zu sechs Stunden als letzter Stand vorgehalten. Ist eine Quelle kurzzeitig nicht erreichbar, bleibt die andere sichtbar. Die Auswahl und Abrufintervalle können unter `news` in `config/dashboard.yaml` geändert werden. Es ist kein API-Schlüssel nötig. Der Raspberry Pi benötigt ausgehenden HTTPS-Zugriff auf `meetingpoint-brandenburg.de` und `www.tagesschau.de`.
 

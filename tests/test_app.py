@@ -546,6 +546,9 @@ def test_meetingpoint_parser_extracts_news_and_skips_advertisements() -> None:
         <div class="tile-meta-k"><span class="badge-k">ANZEIGE</span></div>
         <h2><a class="tile-link" href="/artikel/werbung">Werbung</a></h2>
       </article>
+      <article class="tile">
+        <h2><a class="tile-link" href="https://example.org/falscher-link">Fremder Link</a></h2>
+      </article>
     </main>
     """
 
@@ -563,6 +566,7 @@ def test_news_feed_parser_supports_rss() -> None:
     <rss version="2.0"><channel><item>
       <title>Nachricht &amp; Analyse</title>
       <link>https://example.org/nachricht</link>
+      <guid>rss-id-ist-kein-artikel-link</guid>
       <description><![CDATA[<p>Zusammenfassung der Meldung.</p>]]></description>
       <pubDate>Wed, 21 Oct 2026 08:15:00 +0200</pubDate>
       <category>Inland</category>
@@ -572,9 +576,30 @@ def test_news_feed_parser_supports_rss() -> None:
 
     assert len(items) == 1
     assert items[0]["title"] == "Nachricht & Analyse"
+    assert items[0]["url"] == "https://example.org/nachricht"
     assert items[0]["summary"] == "Zusammenfassung der Meldung."
     assert items[0]["published_at"] == "2026-10-21T06:15:00+00:00"
     assert items[0]["source"] == "Tagesschau"
+
+
+def test_tagesschau_feed_skips_routine_weather_but_keeps_weather_news() -> None:
+    content = """<rss><channel>
+      <item><title>Wetter Deutschland</title>
+        <link>https://www.tagesschau.de/wetter/deutschland/wettervorhersage-deutschland-100.html</link></item>
+      <item><title>Regenradar Deutschland</title>
+        <link>https://www.tagesschau.de/wetter/regenradar-deutschland</link></item>
+      <item><title>Unwetter sorgt für Schäden</title>
+        <link>https://www.tagesschau.de/inland/unwetter-schaeden-100.html</link></item>
+      <item><title>Fremde Seite</title>
+        <link>https://example.org/falscher-link</link></item>
+    </channel></rss>"""
+
+    items = _parse_news_feed(
+        content, "Tagesschau", "https://www.tagesschau.de/index~rss2.xml"
+    )
+
+    assert [item["title"] for item in items] == ["Unwetter sorgt für Schäden"]
+    assert items[0]["url"] == "https://www.tagesschau.de/inland/unwetter-schaeden-100.html"
 
 
 def test_newest_news_sorts_by_publication_date_and_keeps_undated_last() -> None:

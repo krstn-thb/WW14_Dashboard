@@ -13,7 +13,7 @@ from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Awaitable, Callable
-from urllib.parse import quote, urljoin
+from urllib.parse import quote, urljoin, urlsplit
 from xml.etree import ElementTree
 from zoneinfo import ZoneInfo
 
@@ -1432,6 +1432,31 @@ async def get_stocks(config: dict[str, Any]) -> dict[str, Any]:
         }
 
 
+def _news_host_matches(host: str, domain: str) -> bool:
+    return host == domain or host.endswith(f".{domain}")
+
+
+def _news_article_link(raw_link: str, base_url: str, domain: str | None = None) -> str:
+    if not raw_link.strip():
+        return ""
+    try:
+        link = urljoin(base_url, raw_link.strip())
+        parsed = urlsplit(link)
+        host = (parsed.hostname or "").lower()
+    except ValueError:
+        return ""
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not host
+        or parsed.username
+        or parsed.password
+        or parsed.path in {"", "/"}
+        or (domain is not None and not _news_host_matches(host, domain))
+    ):
+        return ""
+    return link
+
+
 class _MeetingpointHTMLParser(HTMLParser):
     """Extract editorial tiles from Meetingpoint's public local-news page."""
 
@@ -1473,7 +1498,9 @@ class _MeetingpointHTMLParser(HTMLParser):
         if "tile-meta-k" in classes or "badge-k" in classes:
             self._current["advertisement"] = True
         if tag == "a" and "tile-link" in classes:
-            self._current["url"] = urljoin(self.base_url, attributes.get("href", ""))
+            self._current["url"] = _news_article_link(
+                attributes.get("href", ""), self.base_url, "meetingpoint-brandenburg.de"
+            )
             self._capture = ("title_parts", self._depth, tag)
         elif "tile-meta" in classes and "tile-meta-k" not in classes:
             self._capture = ("meta_parts", self._depth, tag)
@@ -1550,7 +1577,11 @@ def _plain_news_text(value: str) -> str:
     return " ".join(unescape(re.sub(r"<[^>]+>", " ", value)).split())
 
 
-def _parse_news_feed(content: str, source_name: str) -> list[dict[str, Any]]:
+def _parse_news_feed(
+    content: str, source_name: str, feed_url: str = ""
+) -> list[dict[str, Any]]:
+    feed_host = (urlsplit(feed_url).hostname or "").lower() if feed_url else ""
+    is_tagesschau = _news_host_matches(feed_host, "tagesschau.de")
     root = ElementTree.fromstring(content)
     entries = [
         element
@@ -1567,7 +1598,11 @@ def _parse_news_feed(content: str, source_name: str) -> list[dict[str, Any]]:
         title = _plain_news_text("".join(title_node.itertext())) if title_node is not None else ""
         link = ""
         if link_node is not None:
-            link = (link_node.get("href") or "".join(link_node.itertext())).strip()
+            link = _news_article_link(
+                link_node.get("href") or "".join(link_node.itertext()),
+                feed_url,
+                "tagesschau.de" if is_tagesschau else None,
+            )
         summary = (
             _plain_news_text("".join(summary_node.itertext()))
             if summary_node is not None
@@ -1593,7 +1628,9 @@ def _parse_news_feed(content: str, source_name: str) -> list[dict[str, Any]]:
             category = _plain_news_text(
                 category_node.get("term") or "".join(category_node.itertext())
             )
-        if title and link:
+        if title and link and not (
+            is_tagesschau and urlsplit(link).path.lower().startswith("/wetter/")
+        ):
             items.append(
                 {
                     "title": title,
@@ -1695,7 +1732,7 @@ async def get_news(config: dict[str, Any]) -> dict[str, Any]:
                     },
                 )
                 response.raise_for_status()
-            items = _parse_news_feed(response.text, feed_name)
+            items = _parse_news_feed(response.text, feed_name, feed_url)
             if not items:
                 raise ValueError("keine Meldungen im Feed gefunden")
             return items
