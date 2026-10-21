@@ -116,6 +116,7 @@ class AsyncTTLCache:
 _cache = AsyncTTLCache()
 _market_metadata_cache = AsyncTTLCache()
 _market_search_cache = AsyncTTLCache()
+_yahoo_search_cache = AsyncTTLCache()
 _market_fx_cache = AsyncTTLCache()
 
 
@@ -835,7 +836,7 @@ async def _search_kraken_assets(query: str) -> list[dict[str, str]]:
     return matches[:6]
 
 
-async def _search_yahoo_assets(query: str) -> list[dict[str, str]]:
+async def _fetch_yahoo_asset_search(query: str) -> list[dict[str, str]]:
     params = {
         "q": query,
         "quotesCount": "8",
@@ -874,6 +875,14 @@ async def _search_yahoo_assets(query: str) -> list[dict[str, str]]:
             }
         )
     return results
+
+
+async def _search_yahoo_assets(query: str) -> list[dict[str, str]]:
+    return await _yahoo_search_cache.get_or_load(
+        f"yahoo-search:{query.casefold()}",
+        3600,
+        lambda: _fetch_yahoo_asset_search(query),
+    )
 
 
 async def search_stocks(query: str) -> list[dict[str, str]]:
@@ -1026,20 +1035,80 @@ async def _yahoo_quote_in_euro(quote_data: dict[str, Any]) -> dict[str, Any]:
 
 async def _fetch_yahoo_market(item: dict[str, Any]) -> dict[str, Any]:
     provider = str(item.get("provider") or "").lower()
-    symbol = str(
-        (item.get("provider_id") if provider == "yahoo" else None)
-        or item.get("symbol")
-        or ""
-    ).upper()
-    quote_data = await _yahoo_quote_in_euro(await _fetch_yahoo_quote(symbol))
-    return {
-        **item,
-        **quote_data,
-        "provider": provider or "yahoo",
-        "provider_id": item.get("provider_id") or symbol,
-        "source": "yahoo",
-        "status": "live",
-    }
+    original_symbol = str(item.get("symbol") or "").strip().upper()
+    provider_id = str(item.get("provider_id") or "").strip().upper()
+    label = str(item.get("label") or original_symbol).strip()
+    candidates: list[str] = []
+
+    def add_candidate(value: str) -> None:
+        normalized = value.strip().upper()
+        if normalized and normalized not in candidates:
+            candidates.append(normalized)
+
+    if provider == "yahoo":
+        add_candidate(provider_id)
+    is_nintendo = (
+        provider_id == "JP3756600007"
+        or "nintendo" in label.casefold()
+        or original_symbol.split(".", 1)[0] in {"NTO", "NTDOY", "NTDOF", "7974"}
+    )
+    if is_nintendo:
+        for alias in ("NTO.F", "7974.T", "NTDOY"):
+            add_candidate(alias)
+    trust_original_symbol = provider == "yahoo" or any(
+        separator in original_symbol for separator in (".", "-", "=", "^")
+    )
+    if trust_original_symbol:
+        add_candidate(original_symbol)
+
+    errors: list[str] = []
+
+    async def try_candidates(symbols: list[str]) -> dict[str, Any] | None:
+        for symbol in symbols:
+            try:
+                quote_data = await _yahoo_quote_in_euro(
+                    await _fetch_yahoo_quote(symbol)
+                )
+                return {
+                    **item,
+                    **quote_data,
+                    "provider": "yahoo",
+                    "provider_id": symbol,
+                    "source": "yahoo",
+                    "source_symbol": symbol,
+                    "status": "live",
+                }
+            except Exception as exc:
+                errors.append(f"{symbol}: {exc}")
+        return None
+
+    result = await try_candidates(candidates)
+    if result:
+        return result
+
+    try:
+        search_results = await _search_yahoo_assets(label or original_symbol)
+    except Exception as exc:
+        errors.append(f"Yahoo-Suche: {exc}")
+        search_results = []
+    search_symbols: list[str] = []
+    asset_type = str(item.get("asset_type") or "stock")
+    for match in search_results:
+        if match.get("asset_type") != asset_type:
+            continue
+        symbol = str(match.get("provider_id") or match.get("symbol") or "").upper()
+        if symbol and symbol not in candidates and symbol not in search_symbols:
+            search_symbols.append(symbol)
+        if len(search_symbols) >= 5:
+            break
+    result = await try_candidates(search_symbols)
+    if result:
+        return result
+    if original_symbol not in candidates and original_symbol not in search_symbols:
+        result = await try_candidates([original_symbol])
+        if result:
+            return result
+    raise RuntimeError("; ".join(errors) or f"Kein Yahoo-Kurs für {label}")
 
 
 async def _resolve_boerse_isin(item: dict[str, Any]) -> str:
@@ -1200,7 +1269,9 @@ async def _fetch_kraken_crypto(item: dict[str, Any]) -> dict[str, Any]:
 
 async def _fetch_market_item(item: dict[str, Any]) -> dict[str, Any]:
     is_crypto = item.get("asset_type") == "crypto" or item.get("provider") == "kraken"
-    if is_crypto:
+    if is_crypto and item.get("provider") == "yahoo":
+        loaders = (_fetch_yahoo_market, _fetch_kraken_crypto)
+    elif is_crypto:
         loaders = (_fetch_kraken_crypto, _fetch_yahoo_market)
     elif item.get("provider") == "yahoo":
         loaders = (_fetch_yahoo_market, _fetch_boerse_stock)

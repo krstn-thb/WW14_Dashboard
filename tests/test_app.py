@@ -13,6 +13,7 @@ from app.sources import (
     AsyncTTLCache,
     _crypto_display_symbol,
     _expand_recurring_events,
+    _fetch_yahoo_market,
     _parse_mensa_menu,
     _weather_description,
     _yahoo_quote_in_euro,
@@ -372,6 +373,83 @@ def test_yahoo_quote_is_converted_to_euro(monkeypatch) -> None:
     assert converted["previous_close"] == 45.0
     assert converted["points"] == [45.0, 50.0]
     assert converted["currency"] == "EUR"
+
+
+def test_nintendo_uses_a_working_yahoo_alias(monkeypatch) -> None:
+    requested: list[str] = []
+
+    async def fake_quote(symbol: str):
+        requested.append(symbol)
+        if symbol != "NTO.F":
+            raise RuntimeError("Unbekanntes Kürzel")
+        return {
+            "price": 48.42,
+            "previous_close": 48.0,
+            "currency": "EUR",
+            "points": [48.0, 48.42],
+        }
+
+    monkeypatch.setattr("app.sources._fetch_yahoo_quote", fake_quote)
+    result = asyncio.run(
+        _fetch_yahoo_market(
+            {
+                "symbol": "NTO",
+                "label": "Nintendo Co., Ltd.",
+                "asset_type": "stock",
+                "provider": "boerse_frankfurt",
+                "provider_id": "JP3756600007",
+            }
+        )
+    )
+
+    assert requested == ["NTO.F"]
+    assert result["price"] == 48.42
+    assert result["currency"] == "EUR"
+    assert result["provider"] == "yahoo"
+    assert result["provider_id"] == "NTO.F"
+    assert result["source_symbol"] == "NTO.F"
+
+
+def test_yahoo_searches_for_an_alternate_symbol(monkeypatch) -> None:
+    async def fake_quote(symbol: str):
+        if symbol == "VNA.DE":
+            return {
+                "price": 27.0,
+                "previous_close": 26.5,
+                "currency": "EUR",
+                "points": [26.5, 27.0],
+            }
+        raise RuntimeError("Kürzel nicht gefunden")
+
+    async def fake_search(query: str):
+        assert query == "Vonovia"
+        return [
+            {
+                "symbol": "VNA.DE",
+                "provider_id": "VNA.DE",
+                "label": "Vonovia SE",
+                "asset_type": "stock",
+            }
+        ]
+
+    monkeypatch.setattr("app.sources._fetch_yahoo_quote", fake_quote)
+    monkeypatch.setattr("app.sources._search_yahoo_assets", fake_search)
+    result = asyncio.run(
+        _fetch_yahoo_market(
+            {
+                "symbol": "VNA",
+                "label": "Vonovia",
+                "asset_type": "stock",
+                "provider": "boerse_frankfurt",
+                "provider_id": "DE000A1ML7J1",
+            }
+        )
+    )
+
+    assert result["price"] == 27.0
+    assert result["provider"] == "yahoo"
+    assert result["provider_id"] == "VNA.DE"
+    assert result["source_symbol"] == "VNA.DE"
 
 
 def test_market_quote_is_persisted_in_database(tmp_path: Path) -> None:
