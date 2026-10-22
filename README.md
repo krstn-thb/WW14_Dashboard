@@ -148,7 +148,7 @@ Aktienkurse kommen bevorzugt von **Börse Frankfurt/Xetra**, Kryptokurse bevorzu
 
 ### Mensa
 
-Die Mensa-Slide lädt den aktuellen Werktagsplan der Mensa Brandenburg an der Havel von [iMensa](https://www.imensa.de/brandenburg-an-der-havel/mensa-brandenburg-an-der-havel/montag.html). Am Wochenende wird der nächste Montag angezeigt. Erfolgreich geladene Daten bleiben bei einem kurzen Ausfall bis zu zwölf Stunden als Rückfall erhalten.
+Die Mensa-Slide lädt den aktuellen Werktagsplan der Mensa Brandenburg an der Havel von [iMensa](https://www.imensa.de/brandenburg-an-der-havel/mensa-brandenburg-an-der-havel/montag.html). Am Wochenende wird der nächste Montag angezeigt. Alle fünf Minuten wird die Quelle neu geprüft; Quellstand und Abrufzeit stehen auf der Slide. Bei einem kurzen Ausfall werden zwischengespeicherte Daten höchstens eine Stunde lang als solche gekennzeichnet angezeigt.
 
 Die Quelle kann unter `mensa.base_url` in `config/dashboard.yaml` geändert und die Slide mit `mensa.enabled: false` abgeschaltet werden.
 
