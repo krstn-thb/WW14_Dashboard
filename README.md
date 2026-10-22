@@ -16,7 +16,7 @@ Das Projekt ist bewusst schlank aufgebaut: Ein Python-Dienst liefert Daten und O
 - frei wählbarer Wetterort mit Tagesverlauf und animierter DWD-Regenvorschau für die nächsten zwei Stunden
 - eigene Nachrichten-Slide mit lokalen Meldungen aus Brandenburg und überregionalen Nachrichten
 - Aktien- und Kryptokurse mit Suche, Hinzufügen und Entfernen; alle Preise werden in Euro angezeigt
-- werktäglich automatisch geladener Speiseplan der Mensa Brandenburg an der Havel
+- werktäglich automatisch geladener Speiseplan der Mensa Brandenburg an der Havel; iMensa wird alle fünf Minuten neu geprüft, Quellstand und Abrufzeit sind sichtbar
 - persistente To-do-Liste in SQLite
 - Offline-Anzeige und Fehlerisolierung je Datenquelle
 - automatischer Start als Benutzer-Service und Chromium-Vollbild auf Raspberry Pi OS

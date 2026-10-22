@@ -1851,10 +1851,7 @@ def _parse_mensa_menu(content: str) -> list[dict[str, Any]]:
     parser.feed(content)
     parser.close()
     items: list[dict[str, Any]] = []
-    metadata_markers = (
-        "zusatz",
-        "allergen",
-        "nährwert",
+    metadata_labels = {
         "knoblauch",
         "vegan",
         "vegetarisch",
@@ -1862,7 +1859,7 @@ def _parse_mensa_menu(content: str) -> list[dict[str, Any]]:
         "schwein",
         "rind",
         "fisch",
-    )
+    }
     badge_labels = (
         ("vegan", "Vegan"),
         ("vegetarisch", "Vegetarisch"),
@@ -1872,6 +1869,15 @@ def _parse_mensa_menu(content: str) -> list[dict[str, Any]]:
         ("fisch", "Fisch"),
     )
 
+    def is_description(part: str) -> bool:
+        lowered = part.casefold().strip()
+        return (
+            "€" not in part
+            and lowered not in metadata_labels
+            and not re.search(r"\b(?:zusatz|allergen|nährwert|zuletzt)\b", lowered)
+            and "installieren" not in lowered
+        )
+
     for category, parts in parser.sections:
         full_text = " ".join(parts)
         lowered = full_text.lower()
@@ -1880,25 +1886,10 @@ def _parse_mensa_menu(content: str) -> list[dict[str, Any]]:
         badges = [label for marker, label in badge_labels if marker in lowered]
 
         if category.lower().startswith(("salattheke", "salatbar")):
-            descriptions = [
-                part
-                for part in parts
-                if "€" not in part
-                and not any(marker in part.lower() for marker in metadata_markers)
-                and "installieren" not in part.lower()
-            ][:3]
+            descriptions = [part for part in parts if is_description(part)][:3]
             name = " · ".join(descriptions) or "Salat nach Wahl"
         else:
-            name = next(
-                (
-                    part
-                    for part in parts
-                    if "€" not in part
-                    and not any(marker in part.lower() for marker in metadata_markers)
-                    and "installieren" not in part.lower()
-                ),
-                "",
-            )
+            name = next((part for part in parts if is_description(part)), "")
         if not name:
             continue
         items.append(
@@ -1934,25 +1925,42 @@ async def get_mensa(config: dict[str, Any]) -> dict[str, Any]:
 
     async def load() -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=12, follow_redirects=True) as client:
-            response = await client.get(url, headers={"User-Agent": "WW14-Dashboard/1.0"})
+            response = await client.get(
+                url,
+                headers={
+                    "User-Agent": "WW14-Dashboard/1.0",
+                    "Cache-Control": "no-cache",
+                    "Pragma": "no-cache",
+                },
+            )
             response.raise_for_status()
         items = _parse_mensa_menu(response.text)
         if not items:
             raise ValueError("Auf der iMensa-Seite wurden keine Gerichte gefunden")
+        source_modified_at = None
+        if response.headers.get("Last-Modified"):
+            try:
+                modified = parsedate_to_datetime(response.headers["Last-Modified"])
+                source_modified_at = (
+                    modified.replace(tzinfo=UTC) if modified.tzinfo is None else modified
+                ).astimezone(UTC).isoformat()
+            except (ValueError, TypeError, OverflowError):
+                pass
         return {
             "items": items,
             "date": target_date.isoformat(),
             "weekday": weekday.capitalize(),
             "source_url": url,
+            "source_modified_at": source_modified_at,
             "updated_at": datetime.now(UTC).isoformat(),
         }
 
     try:
         menu, stale = await _cache.get_or_load_with_stale(
             f"mensa:{target_date.isoformat()}",
-            max(300, int(section.get("cache_seconds", 1800))),
-            max(3600, int(section.get("stale_seconds", 43200))),
-            max(60, int(section.get("retry_seconds", 300))),
+            max(60, int(section.get("cache_seconds", 300))),
+            max(300, int(section.get("stale_seconds", 3600))),
+            max(30, int(section.get("retry_seconds", 120))),
             load,
         )
         return {

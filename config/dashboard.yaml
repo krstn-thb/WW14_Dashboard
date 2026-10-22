@@ -108,7 +108,7 @@ news:
 mensa:
   enabled: true
   base_url: "https://www.imensa.de/brandenburg-an-der-havel/mensa-brandenburg-an-der-havel"
-  cache_seconds: 1800
-  retry_seconds: 300
-  stale_seconds: 43200
+  cache_seconds: 300
+  retry_seconds: 120
+  stale_seconds: 3600
 

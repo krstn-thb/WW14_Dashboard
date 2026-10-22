@@ -21,6 +21,7 @@ from app.sources import (
     _weather_description,
     _yahoo_quote_in_euro,
     get_departures,
+    get_mensa,
     get_news,
     get_stocks,
     get_weather,
@@ -706,6 +707,71 @@ def test_mensa_menu_parser_extracts_meals() -> None:
         "calories": 875,
         "badges": ["Vegan"],
     }
+
+
+def test_mensa_parser_keeps_dish_names_containing_attribute_words() -> None:
+    content = """
+    <h3>Angebot 1</h3>
+    <p>Veganer Milchreis mit Apfelmark und Zimt</p>
+    <p>vegan ZUSATZ Antioxidationsmittel NÄHRWERT 804 kcal</p>
+    <span>ZULETZT 26.03.2026</span>
+    <p>2,15 €</p>
+    <h3>Angebot 4</h3>
+    <p>Fish and Chips mit Remoulade</p>
+    <span>Fisch</span>
+    <span>ZULETZT 12.01.2026</span>
+    """
+
+    items = _parse_mensa_menu(content)
+
+    assert [item["name"] for item in items] == [
+        "Veganer Milchreis mit Apfelmark und Zimt",
+        "Fish and Chips mit Remoulade",
+    ]
+
+
+def test_mensa_requests_fresh_page_and_reports_source_time(monkeypatch) -> None:
+    calls: list[tuple[str, dict[str, str]]] = []
+
+    class FakeResponse:
+        text = "<h3>Angebot 1</h3><p>Aktuelles Gericht</p><p>2,15 €</p>"
+        headers = {"Last-Modified": "Thu, 22 Oct 2026 09:55:27 GMT"}
+
+        def raise_for_status(self) -> None:
+            pass
+
+    class FakeClient:
+        def __init__(self, **kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback) -> None:
+            pass
+
+        async def get(self, url: str, *, headers: dict[str, str]):
+            calls.append((url, headers))
+            return FakeResponse()
+
+    monkeypatch.setattr("app.sources.httpx.AsyncClient", FakeClient)
+    monkeypatch.setattr("app.sources._cache", AsyncTTLCache())
+    menu = asyncio.run(
+        get_mensa(
+            {
+                "dashboard": {"timezone": "Europe/Berlin"},
+                "mensa": {"enabled": True, "base_url": "https://example.org/mensa"},
+            }
+        )
+    )
+
+    assert menu["status"] == "live"
+    assert menu["items"][0]["name"] == "Aktuelles Gericht"
+    assert menu["source_modified_at"] == "2026-10-22T09:55:27+00:00"
+    assert menu["updated_at"]
+    assert calls[0][0].startswith("https://example.org/mensa/")
+    assert calls[0][1]["Cache-Control"] == "no-cache"
+    assert calls[0][1]["Pragma"] == "no-cache"
 
 
 def test_climate_metric_selection_lifecycle(tmp_path: Path) -> None:

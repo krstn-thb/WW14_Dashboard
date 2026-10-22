@@ -476,13 +476,22 @@ function renderNews(news) {
 
 function renderMensa(mensa) {
   const status = $("#mensa-state");
-  sourceState(status, mensa.status);
-  if (mensa.stale) status.textContent = "Gespeichert";
+  sourceState(status, mensa.stale ? "stale" : mensa.status);
   const dayLabel = mensa.date
     ? formatDate(mensa.date + "T12:00:00", { weekday: "long", day: "2-digit", month: "long" })
     : mensa.weekday || "Heute";
   $("#mensa-date").textContent = dayLabel;
-  $("#mensa-message").textContent = mensa.message || "Preise für Studierende · Angaben ohne Gewähr";
+  const sourceLabel = mensa.source_modified_at
+    ? `iMensa-Stand ${formatDate(mensa.source_modified_at, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
+    : null;
+  const fetchedLabel = mensa.updated_at
+    ? `Abruf ${formatDate(mensa.updated_at, { hour: "2-digit", minute: "2-digit" })}`
+    : null;
+  $("#mensa-message").textContent = [
+    mensa.message || "Preise für Studierende · Angaben ohne Gewähr",
+    sourceLabel,
+    fetchedLabel,
+  ].filter(Boolean).join(" · ");
   const source = $("#mensa-source");
   if (/^https?:\/\//.test(mensa.source_url || "")) source.href = mensa.source_url;
 
