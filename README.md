@@ -10,6 +10,7 @@ Das Projekt ist bewusst schlank aufgebaut: Ein Python-Dienst liefert Daten und O
 - automatischer Slide-Wechsel alle zehn Sekunden; Pfeiltasten schalten manuell, eine Mausbewegung pausiert die Automatik
 - selbstständige Aktualisierung; Standardintervall 60 Sekunden
 - Loxone-/InfluxDB-Messwerte mit 24-Stunden-Verlauf
+- passive SensoBuild-Slide mit der internen Temperatur-/Luftfeuchte-Webseite und Link zur Bedienung
 - Auswahl vorhandener InfluxDB-Messfelder direkt im Dashboard
 - Deadlines und einmalige oder wiederkehrende Termine direkt im Dashboard eintragen und löschen
 - RE1-Abfahrten ab Brandenburg Hbf Richtung Magdeburg und Berlin inklusive Verspätungen, Ausfällen und Gleisen
@@ -151,6 +152,10 @@ Aktienkurse kommen bevorzugt von **Börse Frankfurt/Xetra**, Kryptokurse bevorzu
 Die Mensa-Slide lädt den aktuellen Werktagsplan der Mensa Brandenburg an der Havel von [iMensa](https://www.imensa.de/brandenburg-an-der-havel/mensa-brandenburg-an-der-havel/montag.html). Am Wochenende wird der nächste Montag angezeigt. Alle fünf Minuten wird die Quelle neu geprüft; Quellstand und Abrufzeit stehen auf der Slide. Bei einem kurzen Ausfall werden zwischengespeicherte Daten höchstens eine Stunde lang als solche gekennzeichnet angezeigt.
 
 Die Quelle kann unter `mensa.base_url` in `config/dashboard.yaml` geändert und die Slide mit `mensa.enabled: false` abgeschaltet werden.
+
+### SensoBuild
+
+Die SensoBuild-Slide zeigt `https://sensobuild.datahub.local/` als passive Webansicht. Die Webseite muss vom Pi aus unter diesem Namen erreichbar sein und ein vom Pi vertrautes HTTPS-Zertifikat verwenden. Der SensoBuild-Server muss außerdem die Einbettung durch die lokale Dashboard-Adresse `http://127.0.0.1:8080` in seiner `frame-ancestors`-Richtlinie erlauben. Bei Zugriff auf das Dashboard über eine andere Adresse muss auch diese gezielt freigegeben werden. Die interne CA und private Schlüssel gehören nicht in dieses Repository.
 
 ### Wetter und Regenradar
 

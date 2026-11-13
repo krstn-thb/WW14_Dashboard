@@ -97,6 +97,8 @@ def test_health_and_dashboard(tmp_path: Path) -> None:
     assert dashboard.json()["news"]["status"] == "disabled"
     assert dashboard.json()["deadlines"]["items"][0]["title"] == "Test deadline"
     assert 'data-slide-title="Nachrichten"' in page.text
+    assert 'data-slide-title="SensoBuild"' in page.text
+    assert 'src="https://sensobuild.datahub.local/"' in page.text
     assert f'/styles.css?v={instance_id}' in page.text
     assert f'/app.js?v={instance_id}' in page.text
     assert f'<meta name="dashboard-instance" content="{instance_id}" />' in page.text
