@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.config import ROOT_DIR, load_config, resolve_project_path
+from app.sensobuild import get_sensobuild
 from app.sources import (
     discover_influx_fields,
     get_climate,
@@ -231,6 +232,11 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
             "revision": application.state.revision,
             "instance_id": application.state.instance_id,
         }
+
+    @application.get("/api/sensobuild")
+    async def sensobuild(response: Response) -> dict[str, Any]:
+        response.headers["Cache-Control"] = "no-store"
+        return await get_sensobuild(config)
 
     @application.get("/api/dashboard")
     async def dashboard(response: Response) -> dict[str, Any]:

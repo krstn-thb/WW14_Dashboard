@@ -678,9 +678,10 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
 .dashboard-slide .panel-action { width: clamp(34px, 2.2vw, 54px); height: clamp(34px, 2.2vw, 54px); font-size: clamp(21px, 1.45vw, 35px); }
 .dashboard-slide .panel-action svg { width: 55%; height: 55%; }
 
-.sensobuild-panel { padding: clamp(14px, 1.1vw, 30px); }
+.sensobuild-panel { padding: clamp(14px, 1.1vw, 30px); overflow: clip; }
 .sensobuild-panel .panel-heading { margin-bottom: clamp(10px, .8vh, 20px); align-items: center; }
 .sensobuild-panel .panel-heading h2 { font-size: clamp(30px, 2.2vw, 58px); }
+.sensobuild-heading-actions { display: flex; align-items: center; gap: clamp(8px, .7vw, 18px); }
 .sensobuild-open {
   flex: 0 0 auto;
   padding: clamp(8px, .6vw, 16px) clamp(14px, 1vw, 26px);
@@ -692,20 +693,46 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
   text-decoration: none;
 }
 .sensobuild-open:hover { background: rgba(131, 230, 185, .12); }
+.sensobuild-stage { flex: 1; min-height: 0; display: grid; place-items: center; }
 .sensobuild-viewport {
-  flex: 1;
-  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr);
+  gap: clamp(10px, 1vw, 28px);
+  width: min(100%, 1280px);
+  aspect-ratio: 16 / 9;
+  padding: clamp(12px, 1vw, 28px);
   overflow: hidden;
   border: 1px solid rgba(216, 241, 232, .12);
   border-radius: clamp(14px, 1vw, 28px);
-  background: #fff;
+  background: linear-gradient(145deg, #12312d, #0a201e);
 }
-.sensobuild-viewport iframe {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border: 0;
-  pointer-events: none;
+.sensobuild-roof { position: relative; min-height: 0; overflow: hidden; display: grid; place-items: center; border-radius: clamp(12px, .8vw, 24px); background: #e9f0f0; }
+.sensobuild-roof img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.sensobuild-roof-caption { position: absolute; bottom: clamp(10px, .8vw, 24px); left: clamp(10px, .8vw, 24px); padding: clamp(7px, .5vw, 15px) clamp(11px, .8vw, 22px); border-radius: 999px; background: rgba(6, 29, 27, .9); color: var(--text); font-size: clamp(14px, .85vw, 26px); font-weight: 700; }
+.sensobuild-content { display: grid; grid-template-rows: minmax(0, .84fr) minmax(0, 1fr); gap: clamp(10px, 1vw, 28px); min-height: 0; }
+.sensobuild-sensors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: clamp(8px, .6vw, 18px); min-height: 0; }
+.sensobuild-sensor { display: flex; flex-direction: column; justify-content: space-between; gap: 7px; min-width: 0; min-height: 0; padding: clamp(11px, .9vw, 28px); border: 1px solid rgba(200, 231, 220, .18); border-radius: clamp(12px, .8vw, 24px); background: rgba(5, 25, 23, .64); text-align: left; cursor: pointer; }
+.sensobuild-sensor:hover, .sensobuild-sensor.is-selected { border-color: var(--green); background: rgba(48, 113, 90, .26); }
+.sensobuild-sensor-name { color: var(--green); font-size: clamp(15px, .9vw, 28px); font-weight: 750; }
+.sensobuild-sensor-location { color: var(--muted); font-size: clamp(12px, .65vw, 20px); }
+.sensobuild-sensor-values { display: flex; justify-content: space-between; gap: 8px; font-size: clamp(17px, 1.25vw, 38px); font-weight: 750; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sensobuild-sensor-values small { font-size: .55em; color: var(--muted); }
+.sensobuild-info { display: grid; place-items: center; padding: 12px; border: 1px dashed rgba(200, 231, 220, .18); border-radius: clamp(12px, .8vw, 24px); color: var(--muted); font-size: clamp(13px, .75vw, 22px); text-align: center; }
+.sensobuild-charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(8px, .6vw, 18px); min-height: 0; }
+.sensobuild-chart { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: clamp(11px, .85vw, 26px); border: 1px solid rgba(200, 231, 220, .18); border-radius: clamp(12px, .8vw, 24px); background: rgba(5, 25, 23, .64); }
+.sensobuild-chart-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.sensobuild-chart-heading h3 { margin: 0; font-size: clamp(16px, 1vw, 30px); }
+.sensobuild-chart-heading strong { font-size: clamp(22px, 1.5vw, 46px); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sensobuild-chart svg { display: block; width: 100%; flex: 1; min-height: 0; margin-top: 8px; overflow: visible; }
+.sensobuild-chart-axis { display: flex; justify-content: space-between; color: var(--muted); font-size: clamp(12px, .7vw, 22px); }
+.sensobuild-chart .chart-gridline { stroke: rgba(200, 231, 220, .15); stroke-width: 1; }
+.sensobuild-chart .chart-line { fill: none; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.sensobuild-chart.temperature .chart-line { stroke: var(--orange); }
+.sensobuild-chart.humidity .chart-line { stroke: var(--blue); }
+.sensobuild-panel .panel-footer { margin-top: clamp(8px, .6vh, 16px); }
+@media (max-width: 1250px) {
+  .sensobuild-viewport { grid-template-columns: minmax(0, .7fr) minmax(0, 1.3fr); }
+  .sensobuild-sensor-values { flex-direction: column; gap: 0; }
 }
 
 .dashboard-slide .metric-grid {

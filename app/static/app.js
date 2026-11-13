@@ -16,6 +16,9 @@ const state = {
   slidePausedByMouse: false,
   mouseResumeTimer: null,
   toastTimer: null,
+  sensobuildData: null,
+  sensobuildSelectedId: 1,
+  sensobuildTimer: null,
   selectedStocks: [],
   selectedClimateMetrics: [],
   selectedDeadlines: [],
@@ -515,6 +518,94 @@ function renderMensa(mensa) {
     }).join("")
     : '<div class="empty">' + escapeHtml(mensa.message || "Für diesen Tag ist kein Speiseplan verfügbar.") + "</div>";
   target.classList.remove("loading-block");
+}
+
+function layoutSensobuildViewport() {
+  const stage = $(".sensobuild-stage");
+  const viewport = $(".sensobuild-viewport");
+  const width = Math.min(stage.clientWidth, stage.clientHeight * 16 / 9);
+  viewport.style.width = `${width}px`;
+  viewport.style.height = `${width * 9 / 16}px`;
+}
+
+function sensobuildValue(value, unit) {
+  return value == null ? "–" : `${formatNumber(value, 1)} ${unit}`;
+}
+
+function sensobuildChart(sensor, field, label, unit) {
+  const history = sensor.history || [];
+  const samples = history.map((point, index) => ({ index, value: Number(point[field]) }))
+    .filter((point) => point.value != null && Number.isFinite(point.value) && history[point.index][field] != null);
+  const latest = sensor[field];
+  if (!samples.length) {
+    return `<article class="sensobuild-chart ${field}"><div class="sensobuild-chart-heading"><h3>${label}</h3><strong>–</strong></div><p>Kein Verlauf verfügbar</p></article>`;
+  }
+  const values = samples.map((point) => point.value);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const endIndex = Math.max(history.length - 1, 1);
+  const path = samples.map(({ index, value }, position) => {
+    const x = 16 + index / endIndex * 368;
+    const y = 145 - (value - min) / span * 120;
+    return `${position ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`;
+  }).join(" ");
+  return `<article class="sensobuild-chart ${field}">
+    <div class="sensobuild-chart-heading"><h3>${label}</h3><strong>${sensobuildValue(latest, unit)}</strong></div>
+    <svg viewBox="0 0 400 160" preserveAspectRatio="none" role="img" aria-label="${label} von Sensor ${sensor.id} in den letzten 24 Stunden">
+      <line class="chart-gridline" x1="16" x2="384" y1="25" y2="25" />
+      <line class="chart-gridline" x1="16" x2="384" y1="85" y2="85" />
+      <line class="chart-gridline" x1="16" x2="384" y1="145" y2="145" />
+      <path class="chart-line" d="${path}" />
+    </svg>
+    <div class="sensobuild-chart-axis"><span>vor 24 h</span><span>jetzt</span></div>
+  </article>`;
+}
+
+function renderSensobuild(data) {
+  state.sensobuildData = data;
+  sourceState($("#sensobuild-state"), data.status);
+  const sensors = data.sensors || [];
+  $("#sensobuild-message").textContent = data.status === "error"
+    ? `SensoBuild nicht erreichbar: ${data.message || "Unbekannter Fehler"}`
+    : data.status === "disabled"
+      ? "SensoBuild ist deaktiviert"
+      : data.status === "stale"
+        ? "Letzte verfügbare Messwerte"
+        : `${sensors.length} Messpunkte · Temperatur und Luftfeuchte`;
+  $("#sensobuild-updated").textContent = data.updated_at
+    ? `Stand ${formatDate(data.updated_at, { hour: "2-digit", minute: "2-digit" })}`
+    : "";
+  const sensorTarget = $("#sensobuild-sensors");
+  const chartTarget = $("#sensobuild-charts");
+  if (!sensors.length) {
+    sensorTarget.innerHTML = '<div class="empty">Keine Sensordaten verfügbar</div>';
+    chartTarget.innerHTML = "";
+  } else {
+    if (!sensors.some((sensor) => sensor.id === state.sensobuildSelectedId)) {
+      state.sensobuildSelectedId = sensors[0].id;
+    }
+    sensorTarget.innerHTML = sensors.map((sensor) => `<button class="sensobuild-sensor ${sensor.id === state.sensobuildSelectedId ? "is-selected" : ""}" type="button" data-sensobuild-sensor="${sensor.id}" aria-pressed="${sensor.id === state.sensobuildSelectedId}">
+      <span><span class="sensobuild-sensor-name">Sensor ${sensor.id}</span><br><span class="sensobuild-sensor-location">${escapeHtml(sensor.location)}</span></span>
+      <span class="sensobuild-sensor-values"><span>${sensobuildValue(sensor.temperature, "°C")}</span><span>${sensobuildValue(sensor.humidity, "%")}</span></span>
+    </button>`).join("") + '<div class="sensobuild-info">Messpunkt wählen für den 24-Stunden-Verlauf</div>';
+    const selected = sensors.find((sensor) => sensor.id === state.sensobuildSelectedId);
+    chartTarget.innerHTML = sensobuildChart(selected, "temperature", "Temperatur", "°C")
+      + sensobuildChart(selected, "humidity", "Luftfeuchte", "%");
+  }
+  sensorTarget.classList.remove("loading-block");
+  chartTarget.classList.remove("loading-block");
+}
+
+async function loadSensobuild() {
+  window.clearTimeout(state.sensobuildTimer);
+  try {
+    renderSensobuild(await request("/api/sensobuild"));
+  } catch (error) {
+    renderSensobuild({ status: "error", message: error.message, sensors: [] });
+  } finally {
+    state.sensobuildTimer = window.setTimeout(loadSensobuild, 60000);
+  }
 }
 
 function renderTodos(items) {
@@ -1109,7 +1200,17 @@ window.addEventListener("mousemove", () => {
     scheduleSlideChange();
   }, 3000);
 }, { passive: true });
-window.addEventListener("resize", () => window.requestAnimationFrame(fitRadarMap));
+window.addEventListener("resize", () => window.requestAnimationFrame(() => {
+  fitRadarMap();
+  layoutSensobuildViewport();
+}));
+
+$("#sensobuild-sensors").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-sensobuild-sensor]");
+  if (!button || !state.sensobuildData) return;
+  state.sensobuildSelectedId = Number(button.dataset.sensobuildSensor);
+  renderSensobuild(state.sensobuildData);
+});
 
 $("#todo-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -1166,7 +1267,9 @@ $("#fullscreen-button").addEventListener("click", async () => {
 window.addEventListener("online", loadDashboard);
 setInterval(updateClock, 1000);
 updateClock();
+layoutSensobuildViewport();
 initializeSlides();
 loadDashboard();
+loadSensobuild();
 state.versionTimer = window.setTimeout(checkAppVersion, 15000);
 

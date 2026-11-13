@@ -155,7 +155,7 @@ Die Quelle kann unter `mensa.base_url` in `config/dashboard.yaml` geändert und 
 
 ### SensoBuild
 
-Die SensoBuild-Slide zeigt `https://sensobuild.datahub.local/` als passive Webansicht. Die Webseite muss vom Pi aus unter diesem Namen erreichbar sein und ein vom Pi vertrautes HTTPS-Zertifikat verwenden. Der SensoBuild-Server muss außerdem die Einbettung durch die lokale Dashboard-Adresse `http://127.0.0.1:8080` in seiner `frame-ancestors`-Richtlinie erlauben. Bei Zugriff auf das Dashboard über eine andere Adresse muss auch diese gezielt freigegeben werden. Die interne CA und private Schlüssel gehören nicht in dieses Repository.
+Die SensoBuild-Slide ordnet Dachbild, fünf aktuelle Messpunkte und die Verläufe des gewählten Sensors gemeinsam in einer 16:9-Kachel an. Sie liest die vorhandenen Daten unter `https://sensobuild.datahub.local/api/dashboard` alle 60 Sekunden. Ein Messpunkt kann direkt auf der Slide gewählt werden; „Original öffnen“ öffnet weiterhin die vollständige SensoBuild-Seite. Der Pi muss den Namen auflösen und das HTTPS-Zertifikat vertrauen. Falls die interne CA nicht im System hinterlegt ist, kann ihr Zertifikat außerhalb des Repositories über `SENSOBUILD_CA_BUNDLE` in `.env` angegeben werden. Die URL und das Abrufintervall stehen unter `sensobuild` in `config/dashboard.yaml`.
 
 ### Wetter und Regenradar
 

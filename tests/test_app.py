@@ -4,11 +4,13 @@ import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import AsyncMock, patch
 from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
 
 from app.main import create_app
+from app.sensobuild import _summarize
 from app.sources import (
     AsyncTTLCache,
     _crypto_display_symbol,
@@ -98,12 +100,45 @@ def test_health_and_dashboard(tmp_path: Path) -> None:
     assert dashboard.json()["deadlines"]["items"][0]["title"] == "Test deadline"
     assert 'data-slide-title="Nachrichten"' in page.text
     assert 'data-slide-title="SensoBuild"' in page.text
-    assert 'src="https://sensobuild.datahub.local/"' in page.text
+    assert 'id="sensobuild-sensors"' in page.text
     assert f'/styles.css?v={instance_id}' in page.text
     assert f'/app.js?v={instance_id}' in page.text
     assert f'<meta name="dashboard-instance" content="{instance_id}" />' in page.text
     assert "__DASHBOARD_INSTANCE__" not in page.text
     assert page.headers["cache-control"] == "no-store"
+
+
+def test_sensobuild_summary_keeps_latest_values_and_bounds_history() -> None:
+    history = [
+        {"temperature": 10 + index / 100, "humidity": 50 + index / 100}
+        for index in range(300)
+    ]
+    summary = _summarize({
+        "last_success": "2026-11-13T09:00:00+00:00",
+        "sensors": [{
+            "id": 1,
+            "latest": {"temperature": 12.5, "humidity": 55.8, "timestamp": "2026-11-13T09:00:00+00:00"},
+            "history": history,
+            "stale": False,
+        }],
+    })
+
+    assert summary["sensors"][0]["temperature"] == 12.5
+    assert summary["sensors"][0]["humidity"] == 55.8
+    assert summary["sensors"][0]["history"][-1]["temperature"] == 12.99
+    assert len(summary["sensors"][0]["history"]) <= 121
+
+
+def test_sensobuild_endpoint_returns_compact_data(tmp_path: Path) -> None:
+    app = create_app(make_config(tmp_path))
+    expected = {"status": "live", "sensors": [{"id": 1, "temperature": 12.5}]}
+    with patch("app.main.get_sensobuild", new=AsyncMock(return_value=expected)):
+        with TestClient(app) as client:
+            response = client.get("/api/sensobuild")
+
+    assert response.status_code == 200
+    assert response.json() == expected
+    assert response.headers["cache-control"] == "no-store"
 
 
 def test_index_alias_uses_same_instance_and_no_cache(tmp_path: Path) -> None:

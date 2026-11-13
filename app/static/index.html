@@ -61,17 +61,24 @@
               <span class="eyebrow">Gebäudedaten · Interne Seite</span>
               <h2>SensoBuild</h2>
             </div>
-            <a class="sensobuild-open" href="https://sensobuild.datahub.local/" target="_blank" rel="noopener noreferrer">Zum Bedienen öffnen ↗</a>
+            <div class="sensobuild-heading-actions">
+              <span id="sensobuild-state" class="source-state">Lädt …</span>
+              <a class="sensobuild-open" href="https://sensobuild.datahub.local/" target="_blank" rel="noopener noreferrer">Original öffnen ↗</a>
+            </div>
           </div>
-          <div class="sensobuild-viewport">
-            <iframe
-              src="https://sensobuild.datahub.local/"
-              title="SensoBuild – Temperatur und Luftfeuchte"
-              loading="eager"
-              referrerpolicy="no-referrer"
-              tabindex="-1"
-            ></iframe>
+          <div class="sensobuild-stage">
+            <div class="sensobuild-viewport">
+              <div class="sensobuild-roof">
+                <img src="https://sensobuild.datahub.local/static/images/dach.png" alt="Demonstrationsdach mit fünf Sensorpositionen" referrerpolicy="no-referrer" />
+                <div class="sensobuild-roof-caption">Demonstrationsdach · fünf Messpunkte</div>
+              </div>
+              <div class="sensobuild-content">
+                <div id="sensobuild-sensors" class="sensobuild-sensors loading-block"></div>
+                <div id="sensobuild-charts" class="sensobuild-charts loading-block"></div>
+              </div>
+            </div>
           </div>
+          <div class="panel-footer"><span id="sensobuild-message">Messwerte werden geladen</span><span id="sensobuild-updated"></span></div>
         </article>
 
         <article class="panel dashboard-slide weather-panel" data-slide-title="Wetter" aria-hidden="true">
