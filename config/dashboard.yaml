@@ -53,7 +53,7 @@ climate:
 sensobuild:
   enabled: true
   url: "https://sensobuild.datahub.local/"
-  ca_bundle: "${SENSOBUILD_CA_BUNDLE:-}"
+  ca_bundle: "${SENSOBUILD_CA_BUNDLE:-app/certs/sensobuild-ca.pem}"
   cache_seconds: 60
 
 deadlines:

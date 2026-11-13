@@ -8,6 +8,7 @@ from typing import Any
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
+from app.config import resolve_project_path
 from app.sources import AsyncTTLCache
 
 
@@ -78,7 +79,7 @@ def _summarize(payload: dict[str, Any]) -> dict[str, Any]:
 def _read_source(url: str, ca_bundle: str) -> dict[str, Any]:
     context = ssl.create_default_context(cafile=ca_bundle or None)
     request = Request(url, headers={"Accept": "application/json"})
-    with urlopen(request, timeout=10, context=context) as response:
+    with urlopen(request, timeout=20, context=context) as response:
         data = response.read(2_000_001)
     if len(data) > 2_000_000:
         raise ValueError("SensoBuild-Antwort ist zu groß")
@@ -94,7 +95,9 @@ async def get_sensobuild(config: dict[str, Any]) -> dict[str, Any]:
         return {"status": "disabled", "sensors": []}
     base_url = str(section.get("url") or "https://sensobuild.datahub.local/").rstrip("/") + "/"
     url = urljoin(base_url, "api/dashboard")
-    ca_bundle = str(section.get("ca_bundle") or "")
+    ca_bundle = str(section.get("ca_bundle") or "app/certs/sensobuild-ca.pem")
+    if ca_bundle:
+        ca_bundle = str(resolve_project_path(config, ca_bundle))
     try:
         result, stale = await _cache.get_or_load_with_stale(
             f"sensobuild:{url}:{ca_bundle}",
