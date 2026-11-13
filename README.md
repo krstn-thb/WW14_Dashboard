@@ -155,7 +155,7 @@ Die Quelle kann unter `mensa.base_url` in `config/dashboard.yaml` geändert und 
 
 ### SensoBuild
 
-Die SensoBuild-Slide ordnet Dachbild, fünf aktuelle Messpunkte und die Verläufe des gewählten Sensors gemeinsam in einer 16:9-Kachel an. Sie liest die vorhandenen Daten unter `https://sensobuild.datahub.local/api/dashboard` alle 60 Sekunden. Ein Messpunkt kann direkt auf der Slide gewählt werden; „Original öffnen“ öffnet weiterhin die vollständige SensoBuild-Seite. Der Pi muss den Namen auflösen. Das öffentliche Zertifikat der SensoBuild-CA liegt unter `app/certs/sensobuild-ca.pem` und wird nur für diesen Datenabruf verwendet; ein privater Schlüssel ist nicht enthalten. Falls die CA erneuert wird, kann ihr neues Zertifikat über `SENSOBUILD_CA_BUNDLE` in `.env` angegeben werden. Die URL und das Abrufintervall stehen unter `sensobuild` in `config/dashboard.yaml`.
+Die SensoBuild-Slide nutzt die verfügbare Fläche für das Dachbild, fünf aktuelle Messpunkte und die Verläufe des gewählten Sensors. Sie liest die vorhandenen Daten unter `https://sensobuild.datahub.local/api/dashboard` alle 60 Sekunden. Ein Messpunkt kann direkt auf der Slide gewählt werden; „Original öffnen“ öffnet weiterhin die vollständige SensoBuild-Seite. Der Pi muss den Namen auflösen. Das öffentliche Zertifikat der SensoBuild-CA liegt unter `app/certs/sensobuild-ca.pem` und wird nur für diesen Datenabruf verwendet; ein privater Schlüssel ist nicht enthalten. Falls die CA erneuert wird, kann ihr neues Zertifikat über `SENSOBUILD_CA_BUNDLE` in `.env` angegeben werden. Die URL und das Abrufintervall stehen unter `sensobuild` in `config/dashboard.yaml`.
 
 ### Wetter und Regenradar
 
