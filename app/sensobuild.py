@@ -77,8 +77,16 @@ def _summarize(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _read_source(url: str, ca_bundle: str) -> dict[str, Any]:
+def _source_context(ca_bundle: str) -> ssl.SSLContext:
     context = ssl.create_default_context(cafile=ca_bundle or None)
+    # SensoBuild's private CA has no keyUsage extension. Keep CA and hostname
+    # verification, but allow this legacy CA in this request's context only.
+    context.verify_flags &= ~ssl.VERIFY_X509_STRICT
+    return context
+
+
+def _read_source(url: str, ca_bundle: str) -> dict[str, Any]:
+    context = _source_context(ca_bundle)
     request = Request(url, headers={"Accept": "application/json"})
     with urlopen(request, timeout=20, context=context) as response:
         data = response.read(2_000_001)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import ssl
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
@@ -10,7 +11,7 @@ from zoneinfo import ZoneInfo
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.sensobuild import _summarize, get_sensobuild
+from app.sensobuild import _source_context, _summarize, get_sensobuild
 from app.sources import (
     AsyncTTLCache,
     _crypto_display_symbol,
@@ -127,6 +128,17 @@ def test_sensobuild_summary_keeps_latest_values_and_bounds_history() -> None:
     assert summary["sensors"][0]["humidity"] == 55.8
     assert summary["sensors"][0]["history"][-1]["temperature"] == 12.99
     assert len(summary["sensors"][0]["history"]) <= 121
+
+
+def test_sensobuild_legacy_ca_keeps_certificate_and_hostname_checks() -> None:
+    strict_context = ssl.create_default_context()
+    strict_context.verify_flags |= ssl.VERIFY_X509_STRICT
+    with patch("app.sensobuild.ssl.create_default_context", return_value=strict_context):
+        context = _source_context("private-ca.pem")
+
+    assert context.verify_mode == ssl.CERT_REQUIRED
+    assert context.check_hostname
+    assert not context.verify_flags & ssl.VERIFY_X509_STRICT
 
 
 def test_sensobuild_endpoint_returns_compact_data(tmp_path: Path) -> None:
