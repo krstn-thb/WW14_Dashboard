@@ -523,9 +523,8 @@ function renderMensa(mensa) {
 function layoutSensobuildViewport() {
   const stage = $(".sensobuild-stage");
   const viewport = $(".sensobuild-viewport");
-  const width = Math.min(stage.clientWidth, stage.clientHeight * 16 / 9);
-  viewport.style.width = `${width}px`;
-  viewport.style.height = `${width * 9 / 16}px`;
+  viewport.style.width = `${stage.clientWidth}px`;
+  viewport.style.height = `${stage.clientHeight}px`;
 }
 
 function sensobuildValue(value, unit) {

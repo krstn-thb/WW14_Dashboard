@@ -696,10 +696,10 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
 .sensobuild-stage { flex: 1; min-height: 0; display: grid; place-items: center; }
 .sensobuild-viewport {
   display: grid;
-  grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr);
+  grid-template-columns: minmax(0, 1.03fr) minmax(0, .97fr);
   gap: clamp(10px, 1vw, 28px);
-  width: min(100%, 1280px);
-  aspect-ratio: 16 / 9;
+  width: 100%;
+  height: 100%;
   padding: clamp(12px, 1vw, 28px);
   overflow: hidden;
   border: 1px solid rgba(216, 241, 232, .12);
@@ -709,7 +709,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
 .sensobuild-roof { position: relative; min-height: 0; overflow: hidden; display: grid; place-items: center; border-radius: clamp(12px, .8vw, 24px); background: #e9f0f0; }
 .sensobuild-roof img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .sensobuild-roof-caption { position: absolute; bottom: clamp(10px, .8vw, 24px); left: clamp(10px, .8vw, 24px); padding: clamp(7px, .5vw, 15px) clamp(11px, .8vw, 22px); border-radius: 999px; background: rgba(6, 29, 27, .9); color: var(--text); font-size: clamp(14px, .85vw, 26px); font-weight: 700; }
-.sensobuild-content { display: grid; grid-template-rows: minmax(0, .84fr) minmax(0, 1fr); gap: clamp(10px, 1vw, 28px); min-height: 0; }
+.sensobuild-content { display: grid; grid-template-rows: minmax(0, 1.8fr) minmax(0, 1fr); gap: clamp(10px, 1vw, 28px); min-height: 0; }
 .sensobuild-sensors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: clamp(8px, .6vw, 18px); min-height: 0; }
 .sensobuild-sensor { display: flex; flex-direction: column; justify-content: space-between; gap: 7px; min-width: 0; min-height: 0; padding: clamp(11px, .9vw, 28px); border: 1px solid rgba(200, 231, 220, .18); border-radius: clamp(12px, .8vw, 24px); background: rgba(5, 25, 23, .64); text-align: left; cursor: pointer; }
 .sensobuild-sensor:hover, .sensobuild-sensor.is-selected { border-color: var(--green); background: rgba(48, 113, 90, .26); }
@@ -730,8 +730,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
 .sensobuild-chart.temperature .chart-line { stroke: var(--orange); }
 .sensobuild-chart.humidity .chart-line { stroke: var(--blue); }
 .sensobuild-panel .panel-footer { margin-top: clamp(8px, .6vh, 16px); }
-@media (max-width: 1250px) {
-  .sensobuild-viewport { grid-template-columns: minmax(0, .7fr) minmax(0, 1.3fr); }
+@media (max-width: 1800px) {
   .sensobuild-sensor-values { flex-direction: column; gap: 0; }
 }
 

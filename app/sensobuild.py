@@ -13,6 +13,7 @@ from app.sources import AsyncTTLCache
 
 
 _cache = AsyncTTLCache()
+_last_errors: dict[str, str] = {}
 _SENSOR_LOCATIONS = {
     1: "Hinten links",
     2: "Vorne links",
@@ -98,14 +99,25 @@ async def get_sensobuild(config: dict[str, Any]) -> dict[str, Any]:
     ca_bundle = str(section.get("ca_bundle") or "app/certs/sensobuild-ca.pem")
     if ca_bundle:
         ca_bundle = str(resolve_project_path(config, ca_bundle))
+    cache_key = f"sensobuild:{url}:{ca_bundle}"
+
+    async def load() -> dict[str, Any]:
+        try:
+            result = await asyncio.to_thread(_read_source, url, ca_bundle)
+        except Exception as exc:
+            _last_errors[cache_key] = str(exc)
+            raise
+        _last_errors.pop(cache_key, None)
+        return result
+
     try:
         result, stale = await _cache.get_or_load_with_stale(
-            f"sensobuild:{url}:{ca_bundle}",
+            cache_key,
             max(15, int(section.get("cache_seconds", 60))),
             3600,
             60,
-            lambda: asyncio.to_thread(_read_source, url, ca_bundle),
+            load,
         )
     except Exception as exc:
-        return {"status": "error", "message": str(exc), "sensors": []}
+        return {"status": "error", "message": _last_errors.get(cache_key, str(exc)), "sensors": []}
     return {**result, "status": "stale" if stale else "live"}

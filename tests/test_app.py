@@ -10,7 +10,7 @@ from zoneinfo import ZoneInfo
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.sensobuild import _summarize
+from app.sensobuild import _summarize, get_sensobuild
 from app.sources import (
     AsyncTTLCache,
     _crypto_display_symbol,
@@ -139,6 +139,20 @@ def test_sensobuild_endpoint_returns_compact_data(tmp_path: Path) -> None:
     assert response.status_code == 200
     assert response.json() == expected
     assert response.headers["cache-control"] == "no-store"
+
+
+def test_sensobuild_retry_shows_original_error(tmp_path: Path) -> None:
+    config = {
+        "_root_dir": str(tmp_path),
+        "sensobuild": {"url": f"https://{tmp_path.name}.invalid/"},
+    }
+    with patch("app.sensobuild._read_source", side_effect=RuntimeError("Zertifikat nicht vertraut")):
+        first = asyncio.run(get_sensobuild(config))
+        retry = asyncio.run(get_sensobuild(config))
+
+    assert first["status"] == "error"
+    assert first["message"] == "Zertifikat nicht vertraut"
+    assert retry["message"] == first["message"]
 
 
 def test_index_alias_uses_same_instance_and_no_cache(tmp_path: Path) -> None:
