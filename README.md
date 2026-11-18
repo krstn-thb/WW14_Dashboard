@@ -10,7 +10,7 @@ Das Projekt ist bewusst schlank aufgebaut: Ein Python-Dienst liefert Daten und O
 - automatischer Slide-Wechsel alle zehn Sekunden; Pfeiltasten schalten manuell, eine Mausbewegung pausiert die Automatik
 - selbstständige Aktualisierung; Standardintervall 60 Sekunden
 - Loxone-/InfluxDB-Messwerte mit 24-Stunden-Verlauf
-- passive SensoBuild-Slide mit der internen Temperatur-/Luftfeuchte-Webseite und Link zur Bedienung
+- SensoBuild-Slide mit Dachbild, fünf Messpunkten, Temperatur- und Luftfeuchteverläufen sowie Link zur Originalseite
 - Auswahl vorhandener InfluxDB-Messfelder direkt im Dashboard
 - Deadlines und einmalige oder wiederkehrende Termine direkt im Dashboard eintragen und löschen
 - RE1-Abfahrten ab Brandenburg Hbf Richtung Magdeburg und Berlin inklusive Verspätungen, Ausfällen und Gleisen
@@ -156,6 +156,8 @@ Die Quelle kann unter `mensa.base_url` in `config/dashboard.yaml` geändert und 
 ### SensoBuild
 
 Die SensoBuild-Slide nutzt die verfügbare Fläche für das Dachbild, fünf aktuelle Messpunkte und die Verläufe des gewählten Sensors. Sie liest die vorhandenen Daten unter `https://sensobuild.datahub.local/api/dashboard` alle 60 Sekunden. Ein Messpunkt kann direkt auf der Slide gewählt werden; „Original öffnen“ öffnet weiterhin die vollständige SensoBuild-Seite. Der Pi muss den Namen auflösen. Das öffentliche Zertifikat der SensoBuild-CA liegt unter `app/certs/sensobuild-ca.pem` und wird nur für diesen Datenabruf verwendet; ein privater Schlüssel ist nicht enthalten. Da dieser internen CA die `keyUsage`-Erweiterung fehlt, lockert der SensoBuild-Abruf nur die strukturelle X.509-Strenge; die CA- und Hostnamenprüfung bleiben aktiv. Langfristig sollte die CA mit der vorgeschriebenen Erweiterung erneuert werden. Falls die CA erneuert wird, kann ihr neues Zertifikat über `SENSOBUILD_CA_BUNDLE` in `.env` angegeben werden. Die URL und das Abrufintervall stehen unter `sensobuild` in `config/dashboard.yaml`.
+
+Falls `getent hosts sensobuild.datahub.local` auf dem Pi nichts ausgibt, muss der interne Name einer erreichbaren Server-IP zugeordnet werden. Auf Systemen mit `cloud-init` und `manage_etc_hosts: true` wird `/etc/hosts` bei jedem Start neu erzeugt. Dort gehört die Zuordnung dauerhaft in `/etc/cloud/templates/hosts.tmpl`, zum Beispiel als eigene Zeile `172.16.1.18 sensobuild.datahub.local` (IP bei Änderung des Servers anpassen). Nach dem Speichern und Neustart mit `getent hosts sensobuild.datahub.local` prüfen. Auf Systemen ohne diese `cloud-init`-Verwaltung reicht ein Eintrag in `/etc/hosts`.
 
 ### Wetter und Regenradar
 
