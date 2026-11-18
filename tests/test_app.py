@@ -2,16 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import json
+import socket
 import ssl
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
+from urllib.error import URLError
 from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from app.sensobuild import _source_context, _summarize, get_sensobuild
+from app.sensobuild import _AddressedHTTPSConnection, _read_bytes, _source_context, _summarize, get_sensobuild
 from app.sources import (
     AsyncTTLCache,
     _crypto_display_symbol,
@@ -102,6 +104,7 @@ def test_health_and_dashboard(tmp_path: Path) -> None:
     assert 'data-slide-title="Nachrichten"' in page.text
     assert 'data-slide-title="SensoBuild"' in page.text
     assert 'id="sensobuild-sensors"' in page.text
+    assert 'src="/api/sensobuild/roof"' in page.text
     assert f'/styles.css?v={instance_id}' in page.text
     assert f'/app.js?v={instance_id}' in page.text
     assert f'<meta name="dashboard-instance" content="{instance_id}" />' in page.text
@@ -141,6 +144,32 @@ def test_sensobuild_legacy_ca_keeps_certificate_and_hostname_checks() -> None:
     assert not context.verify_flags & ssl.VERIFY_X509_STRICT
 
 
+def test_sensobuild_ip_connection_keeps_tls_hostname() -> None:
+    context = Mock()
+    raw_socket = Mock()
+    with patch("app.sensobuild.socket.create_connection", return_value=raw_socket) as create:
+        connection = _AddressedHTTPSConnection("sensobuild.datahub.local", "172.16.1.18", context)
+        connection.connect()
+
+    create.assert_called_once_with(("172.16.1.18", 443), 20)
+    context.wrap_socket.assert_called_once_with(raw_socket, server_hostname="sensobuild.datahub.local")
+
+
+def test_sensobuild_uses_ip_only_when_name_lookup_fails() -> None:
+    response = Mock(status=200)
+    response.read.return_value = b"data"
+    connection = Mock()
+    connection.getresponse.return_value = response
+    with patch("app.sensobuild.urlopen", side_effect=URLError(socket.gaierror(-2, "Name or service not known"))):
+        with patch("app.sensobuild._AddressedHTTPSConnection", return_value=connection) as factory:
+            data = _read_bytes("https://sensobuild.datahub.local/api/dashboard", "", "172.16.1.18", 10, "application/json")
+
+    assert data == b"data"
+    assert factory.call_args.args[:2] == ("sensobuild.datahub.local", "172.16.1.18")
+    connection.request.assert_called_once_with("GET", "/api/dashboard", headers={"Accept": "application/json"})
+    connection.close.assert_called_once()
+
+
 def test_sensobuild_endpoint_returns_compact_data(tmp_path: Path) -> None:
     app = create_app(make_config(tmp_path))
     expected = {"status": "live", "sensors": [{"id": 1, "temperature": 12.5}]}
@@ -151,6 +180,17 @@ def test_sensobuild_endpoint_returns_compact_data(tmp_path: Path) -> None:
     assert response.status_code == 200
     assert response.json() == expected
     assert response.headers["cache-control"] == "no-store"
+
+
+def test_sensobuild_roof_is_served_from_dashboard(tmp_path: Path) -> None:
+    app = create_app(make_config(tmp_path))
+    with patch("app.main.get_sensobuild_roof", new=AsyncMock(return_value=b"\x89PNG\r\n\x1a\n")):
+        with TestClient(app) as client:
+            response = client.get("/api/sensobuild/roof")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.content == b"\x89PNG\r\n\x1a\n"
 
 
 def test_sensobuild_retry_shows_original_error(tmp_path: Path) -> None:

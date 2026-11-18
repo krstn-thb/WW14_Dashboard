@@ -54,6 +54,7 @@ sensobuild:
   enabled: true
   url: "https://sensobuild.datahub.local/"
   ca_bundle: "${SENSOBUILD_CA_BUNDLE:-app/certs/sensobuild-ca.pem}"
+  connect_ip: "${SENSOBUILD_CONNECT_IP:-172.16.1.18}"
   cache_seconds: 60
 
 deadlines:

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import json
 import math
+import socket
 import ssl
+from http.client import HTTPSConnection
 from typing import Any
-from urllib.parse import urljoin
+from urllib.error import URLError
+from urllib.parse import urljoin, urlsplit
 from urllib.request import Request, urlopen
 
 from app.config import resolve_project_path
@@ -85,33 +89,85 @@ def _source_context(ca_bundle: str) -> ssl.SSLContext:
     return context
 
 
-def _read_source(url: str, ca_bundle: str) -> dict[str, Any]:
+class _AddressedHTTPSConnection(HTTPSConnection):
+    """Connect to an IP while retaining the URL host for SNI and TLS checks."""
+
+    def __init__(self, hostname: str, connect_ip: str, context: ssl.SSLContext) -> None:
+        super().__init__(hostname, timeout=20, context=context)
+        self._connect_ip = str(ipaddress.ip_address(connect_ip))
+        self._tls_context = context
+
+    def connect(self) -> None:
+        raw_socket = socket.create_connection((self._connect_ip, self.port), self.timeout)
+        try:
+            self.sock = self._tls_context.wrap_socket(raw_socket, server_hostname=self.host)
+        except Exception:
+            raw_socket.close()
+            raise
+
+
+def _read_bytes(url: str, ca_bundle: str, connect_ip: str, limit: int, accept: str) -> bytes:
     context = _source_context(ca_bundle)
-    request = Request(url, headers={"Accept": "application/json"})
-    with urlopen(request, timeout=20, context=context) as response:
-        data = response.read(2_000_001)
-    if len(data) > 2_000_000:
+    request = Request(url, headers={"Accept": accept})
+    try:
+        with urlopen(request, timeout=20, context=context) as response:
+            data = response.read(limit + 1)
+    except URLError as exc:
+        if not connect_ip or not isinstance(exc.reason, socket.gaierror):
+            raise
+        parsed = urlsplit(url)
+        if parsed.scheme != "https" or not parsed.hostname:
+            raise ValueError("SensoBuild benötigt eine HTTPS-Adresse") from exc
+        target = parsed.path or "/"
+        if parsed.query:
+            target += "?" + parsed.query
+        connection = _AddressedHTTPSConnection(parsed.hostname, connect_ip, context)
+        try:
+            connection.request("GET", target, headers={"Accept": accept})
+            response = connection.getresponse()
+            if response.status != 200:
+                raise ValueError(f"SensoBuild antwortet mit HTTP {response.status}")
+            data = response.read(limit + 1)
+        finally:
+            connection.close()
+    if len(data) > limit:
         raise ValueError("SensoBuild-Antwort ist zu groß")
+    return data
+
+
+def _read_source(url: str, ca_bundle: str, connect_ip: str = "") -> dict[str, Any]:
+    data = _read_bytes(url, ca_bundle, connect_ip, 2_000_000, "application/json")
     payload = json.loads(data)
     if not isinstance(payload, dict):
         raise ValueError("SensoBuild hat kein JSON-Objekt geliefert")
     return _summarize(payload)
 
 
+def _source_settings(config: dict[str, Any]) -> tuple[str, str, str]:
+    section = config.get("sensobuild", {})
+    base_url = str(section.get("url") or "https://sensobuild.datahub.local/").rstrip("/") + "/"
+    ca_bundle = str(resolve_project_path(config, str(section.get("ca_bundle") or "app/certs/sensobuild-ca.pem")))
+    connect_ip = str(section.get("connect_ip") or "").strip()
+    return base_url, ca_bundle, connect_ip
+
+
+async def get_sensobuild_roof(config: dict[str, Any]) -> bytes:
+    base_url, ca_bundle, connect_ip = _source_settings(config)
+    url = urljoin(base_url, "static/images/dach.png")
+    return await asyncio.to_thread(_read_bytes, url, ca_bundle, connect_ip, 2_000_000, "image/png")
+
+
 async def get_sensobuild(config: dict[str, Any]) -> dict[str, Any]:
     section = config.get("sensobuild", {})
     if not section.get("enabled", True):
         return {"status": "disabled", "sensors": []}
-    base_url = str(section.get("url") or "https://sensobuild.datahub.local/").rstrip("/") + "/"
+    base_url, ca_bundle, connect_ip = _source_settings(config)
     url = urljoin(base_url, "api/dashboard")
-    ca_bundle = str(section.get("ca_bundle") or "app/certs/sensobuild-ca.pem")
-    if ca_bundle:
-        ca_bundle = str(resolve_project_path(config, ca_bundle))
-    cache_key = f"sensobuild:{url}:{ca_bundle}"
+    cache_key = f"sensobuild:{url}:{ca_bundle}:{connect_ip}"
 
     async def load() -> dict[str, Any]:
         try:
-            result = await asyncio.to_thread(_read_source, url, ca_bundle)
+            result = await asyncio.to_thread(_read_source, url, ca_bundle, connect_ip)
         except Exception as exc:
             _last_errors[cache_key] = str(exc)
             raise

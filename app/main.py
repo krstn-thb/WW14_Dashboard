@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.config import ROOT_DIR, load_config, resolve_project_path
-from app.sensobuild import get_sensobuild
+from app.sensobuild import get_sensobuild, get_sensobuild_roof
 from app.sources import (
     discover_influx_fields,
     get_climate,
@@ -237,6 +237,14 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
     async def sensobuild(response: Response) -> dict[str, Any]:
         response.headers["Cache-Control"] = "no-store"
         return await get_sensobuild(config)
+
+    @application.get("/api/sensobuild/roof")
+    async def sensobuild_roof() -> Response:
+        try:
+            image = await get_sensobuild_roof(config)
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"SensoBuild-Bild nicht verfügbar: {exc}") from exc
+        return Response(content=image, media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
 
     @application.get("/api/dashboard")
     async def dashboard(response: Response) -> dict[str, Any]:
