@@ -14,6 +14,7 @@ const state = {
   slideIntervalMs: 10000,
   slideAutoplay: true,
   slidePausedByMouse: false,
+  activeTile: null,
   mouseResumeTimer: null,
   toastTimer: null,
   sensobuildData: null,
@@ -638,6 +639,51 @@ function dashboardSlides() {
   return Array.from(document.querySelectorAll(".dashboard-slide"));
 }
 
+const slideTileSelectors = {
+  Raumklima: ".metric",
+  SensoBuild: ".sensobuild-sensor",
+  Wetter: ".radar-map[role='button'], .weather-hour, .weather-day",
+  Nachrichten: ".news-card",
+  "RE1 Abfahrten": ".departure-row",
+  Mensa: ".mensa-card",
+  Märkte: ".stock-row",
+  Planer: ".list-item, .event-item, .todo-item",
+};
+
+function markActiveTile(tile) {
+  state.activeTile?.classList.remove("tile-keyboard-active");
+  state.activeTile = tile;
+  if (!tile) return;
+  if (!tile.matches("a, button, input") && !tile.hasAttribute("tabindex")) tile.tabIndex = -1;
+  tile.classList.add("tile-keyboard-active");
+  tile.focus({ preventScroll: true });
+  tile.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+}
+
+function moveWithinSlide(direction) {
+  const slide = dashboardSlides()[state.slideIndex];
+  const selector = slideTileSelectors[slide.dataset.slideTitle];
+  if (!selector) return;
+  const tiles = Array.from(slide.querySelectorAll(selector));
+  if (!tiles.length) return;
+  let currentIndex = tiles.indexOf(state.activeTile);
+  if (currentIndex < 0 && slide.dataset.slideTitle === "SensoBuild") {
+    currentIndex = tiles.findIndex((tile) => Number(tile.dataset.sensobuildSensor) === state.sensobuildSelectedId);
+  }
+  const nextIndex = currentIndex < 0
+    ? (direction > 0 ? 0 : tiles.length - 1)
+    : (currentIndex + direction + tiles.length) % tiles.length;
+  let tile = tiles[nextIndex];
+  if (slide.dataset.slideTitle === "SensoBuild" && state.sensobuildData) {
+    const sensorId = Number(tile.dataset.sensobuildSensor);
+    state.sensobuildSelectedId = sensorId;
+    renderSensobuild(state.sensobuildData);
+    tile = slide.querySelector(`[data-sensobuild-sensor="${sensorId}"]`);
+  }
+  markActiveTile(tile);
+  scheduleSlideChange();
+}
+
 function scheduleSlideChange() {
   window.clearTimeout(state.slideTimer);
   state.slideTimer = null;
@@ -654,6 +700,8 @@ function scheduleSlideChange() {
 function showSlide(index) {
   const slides = dashboardSlides();
   if (!slides.length) return;
+  if (document.activeElement === state.activeTile) state.activeTile.blur();
+  markActiveTile(null);
   const movingBackward = index < state.slideIndex;
   $(".slide-deck").classList.toggle("is-backward", movingBackward);
   state.slideIndex = (index + slides.length) % slides.length;
@@ -1176,13 +1224,16 @@ $("#slide-autoplay").addEventListener("click", () => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if (document.querySelector("dialog[open]") || event.target.matches("input, textarea, select")) return;
+  if (document.querySelector("dialog[open]") || event.target.closest("input, textarea, select, [contenteditable='true']")) return;
   if (event.key === "ArrowRight") {
     event.preventDefault();
     showSlide(state.slideIndex + 1);
   } else if (event.key === "ArrowLeft") {
     event.preventDefault();
     showSlide(state.slideIndex - 1);
+  } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    moveWithinSlide(event.key === "ArrowDown" ? 1 : -1);
   }
 });
 

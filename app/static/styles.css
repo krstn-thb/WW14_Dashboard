@@ -659,6 +659,7 @@ html, body { width: 100%; height: 100%; overflow: hidden; }
   transition-delay: 0s;
 }
 .dashboard-slide.is-active::before { animation: slide-light-sweep .9s cubic-bezier(.22, .75, .25, 1) both; }
+.dashboard-slide .tile-keyboard-active { outline: 3px solid var(--green); outline-offset: -3px; box-shadow: 0 0 0 4px rgba(131, 230, 185, .12), 0 0 24px rgba(131, 230, 185, .18); }
 .slide-deck.is-backward .dashboard-slide.is-active::before { animation-name: slide-light-sweep-back; }
 @keyframes slide-light-sweep {
   0% { opacity: 0; transform: translateX(-115%) skewX(-12deg); }

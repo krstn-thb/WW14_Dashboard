@@ -7,7 +7,7 @@ Das Projekt ist bewusst schlank aufgebaut: Ein Python-Dienst liefert Daten und O
 ## Aktueller Funktionsumfang
 
 - OLED-taugliche Vollbild-Slides für 16:9-Monitore, optimiert für Full HD und 4K
-- automatischer Slide-Wechsel alle zehn Sekunden; Pfeiltasten schalten manuell, eine Mausbewegung pausiert die Automatik
+- automatischer Slide-Wechsel alle zehn Sekunden; ←/→ schalten Slides, ↑/↓ wechseln Kacheln innerhalb der aktuellen Slide, eine Mausbewegung pausiert die Automatik
 - selbstständige Aktualisierung; Standardintervall 60 Sekunden
 - Loxone-/InfluxDB-Messwerte mit 24-Stunden-Verlauf
 - SensoBuild-Slide mit Dachbild, fünf Messpunkten, Temperatur- und Luftfeuchteverläufen sowie Link zur Originalseite
